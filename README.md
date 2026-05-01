@@ -1,9 +1,10 @@
 
-# Final Project | IT-2308 | Alisher Berik
+# TV Store Website | IT-2308 | Alisher Berik
 
 ## Description
 
-The Final Project of Advanced Databases (NoSQL).
+The Final Project of Advanced Database (NoSQL) subject.
+The project is TV Store Website using MongoDB Atlas.
 
 Project presentation: [Link](https://www.canva.com/design/DAGaaIXPnLc/tB2iQ9L4YuvMBGXciCFusQ/edit?utm_content=DAGaaIXPnLc&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
 
