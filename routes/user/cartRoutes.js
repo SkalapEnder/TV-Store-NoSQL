@@ -43,7 +43,7 @@ router.post("/add", async (req, res) => {
 
         cart.cart_total = cart.products.reduce((sum, p) => sum + p.total, 0);
         await cart.save();
-        res.status(200).json({ message: "Product added to cart", cart });
+        res.redirect(303, `/products/${productId}`);
     } catch (error) {
         console.error("Error adding product to cart:", error);
         res.status(500).json({ error: "Failed to add product to cart: " + error.message });
@@ -55,15 +55,16 @@ router.post("/remove", async (req, res) => {
     try {
         const { product_id } = req.body;
         const user_id = req.session.userId;
-        if (!user_id || !product_id) return res.status(400).json({ error: "User ID and Product ID required" });
+        const productId = Number(product_id);
+        if (!user_id || !Number.isInteger(productId)) return res.status(400).json({ error: "User ID and Product ID required" });
 
         let cart = await Cart.findOne({ user_id });
         if (!cart) return res.status(404).json({ error: "Cart not found" });
 
-        cart.products = cart.products.filter(p => p.product_id !== product_id);
+        cart.products = cart.products.filter(p => Number(p.product_id) !== productId);
         await cart.save();
 
-        res.json({ message: "Product removed from cart", cart });
+        res.redirect(303, `/cart`);
     } catch (err) {
         console.error("Error removing product from cart:", err);
         res.status(500).json({ error: "Internal Server Error" });
@@ -91,7 +92,7 @@ router.post("/purchase", async (req, res) => {
             cart.products.map(p => ({ product_id: p.product_id, quantity: p.quantity }))
         );
 
-        res.json({ message: "Purchase successful!", orderId: order.orderId, total: order.total });
+        res.redirect(303, `/cart`);
     } catch (err) {
         // Put the cart back, so a failed purchase loses nothing
         if (cart) {
