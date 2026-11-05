@@ -4,6 +4,7 @@ const session = require('express-session');
 const methodOverride = require("method-override");
 const passport = require('passport');
 const connectDB = require("./scripts/db");
+const User = require('./models/User');
 
 //const adminRouter = require("./routes/admin/adminRoutes");
 const adminCategoryRouter = require("./routes/admin/adminCategoryRoutes");
@@ -44,7 +45,21 @@ app.use((req, res, next) => {
 app.use(passport.initialize());
 app.use(passport.session());
 
-app.get('/', (req, res) => res.render('index'))
+app.get('/', async (req, res) => {
+    try {
+        let recentHistory = [];
+        if (req.session.userId) {
+            const user = await User.findById(req.session.userId).select('view_history').lean();
+            recentHistory = (user?.view_history || [])
+                .sort((a, b) => new Date(b.lastViewed) - new Date(a.lastViewed))
+                .slice(0, 5);
+        }
+        res.render('index', { recentHistory });
+    } catch (err) {
+        console.error('Error loading recent history:', err);
+        res.status(500).send('Error loading recent history');
+    }
+});
 
 // Routes
 app.use('/categories/admin', adminCategoryRouter);

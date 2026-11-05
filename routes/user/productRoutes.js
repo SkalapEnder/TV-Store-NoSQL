@@ -3,6 +3,7 @@ const router = express.Router();
 const Product = require("../../models/Product");
 const Brand = require("../../models/Brand");
 const Category = require("../../models/Category");
+const { trackView } = require("../../scripts/tracker");
 const brand = require("ejs");
 const category = require("ejs");
 
@@ -24,6 +25,8 @@ router.get("/:id", async (req, res) => {
     try {
         const product = await Product.findOne({product_id: parseInt(req.params.id)});
         if (!product) return res.status(404).send("Product not found");
+        trackView(req, product);    
+
         res.render("products/show", { product });
     } catch (err) {
         res.status(500).send("Error fetching product" + err);

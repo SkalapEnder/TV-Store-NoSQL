@@ -25,7 +25,7 @@ cartSchema.pre("save", function (next) {
     });
 
     this.cart_total = this.products.reduce((sum, p) => sum + p.total, 0);
-    next();
+    //next();
 });
 
 const Task = mongoose.model('cart', cartSchema);

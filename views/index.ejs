@@ -21,6 +21,45 @@
     <a class="link-offset-2 link-underline link-underline-opacity-0 fs-4 fw-bold" href="/auth/login">Go to Sign Up Page</a>
 </main>
 
+<% if (isLoggedIn) { %>
+    <section class="container bg-white shadow rounded mt-4 p-4">
+        <h2 class="text-center">Recent History</h2>
+        <% if (recentHistory && recentHistory.length > 0) { %>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col">Product</th>
+                            <th scope="col">Price (KZT)</th>
+                            <th scope="col">Views</th>
+                            <th scope="col">Last Viewed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% recentHistory.forEach((item) => { %>
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <% if (item.pictures && item.pictures.length > 0) { %>
+                                            <img src="<%= item.pictures[0] %>" alt="" loading="lazy" style="width: 64px; height: 48px; object-fit: contain;">
+                                        <% } %>
+                                        <a href="/products/<%= item.product_id %>"><%= item.name || 'Product' %></a>
+                                    </div>
+                                </td>
+                                <td><%= typeof item.price === 'number' ? item.price.toFixed(2) : 'N/A' %></td>
+                                <td><%= item.views || 0 %></td>
+                                <td><%= item.lastViewed ? convertData(item.lastViewed) : 'N/A' %></td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+        <% } else { %>
+            <p class="text-center text-muted mb-0">You have not viewed any products yet.</p>
+        <% } %>
+    </section>
+<% } %>
+
 <%- include('templates/footer'); %>
 </body>
 </html>
