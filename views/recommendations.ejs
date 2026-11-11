@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <%- include('templates/head', { title: 'Recommended for you' }); %>
+</head>
+<body>
+<%- include('templates/navbar', { active: 'foryou' }); %>
+<% const items = (result && result.items) || []; %>
+
+<main class="container page">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/">Home</a></li>
+            <li class="breadcrumb-item active" aria-current="page">For you</li>
+        </ol>
+    </nav>
+
+    <section class="reco-hero d-flex flex-wrap gap-4 align-items-center justify-content-between fade-in">
+        <div class="d-flex gap-3 align-items-start" style="max-width: 640px">
+            <span class="reco-icon"><i class="bi bi-stars"></i></span>
+            <div>
+                <h1 class="serif mb-1">Recommended for you</h1>
+                <% if (!isLoggedIn) { %>
+                    <p class="text-muted mb-0">Log in and browse a few TVs: we will pick models that people with similar taste liked.</p>
+                <% } else if (result && result.personalized > 0) { %>
+                    <p class="text-muted mb-0">Picked from <%= result.interactions %> products you viewed, rated or bought, and from what shoppers with similar taste chose.</p>
+                <% } else { %>
+                    <p class="text-muted mb-0">We don't know your taste yet. Open a few products, rate them, and this page will become personal. For now, here is what is popular.</p>
+                <% } %>
+            </div>
+        </div>
+        <% if (isLoggedIn) { %>
+            <div class="d-flex flex-column align-items-end gap-2">
+                <div class="admin-tabs" role="tablist" aria-label="Algorithm">
+                    <a href="/recommendations" class="<%= algorithm === 'item' ? 'active' : '' %>" title="Products similar to the ones you like"><i class="bi bi-diagram-3"></i>Similar products</a>
+                    <a href="/recommendations?algorithm=user" class="<%= algorithm === 'user' ? 'active' : '' %>" title="What shoppers like you chose"><i class="bi bi-people"></i>Shoppers like you</a>
+                </div>
+                <% if (result) { %>
+                    <span class="text-muted small">
+                        <%= result.cached ? 'From cache' : 'Computed' %> in <%= result.tookMs %> ms
+                    </span>
+                <% } %>
+            </div>
+        <% } else { %>
+            <a href="/auth/login" class="btn btn-brand btn-lg">Log in</a>
+        <% } %>
+    </section>
+
+    <% if (isLoggedIn) { %>
+        <section class="mb-5">
+            <% if (items.length) { %>
+                <div class="row g-3 g-xl-4">
+                    <% items.forEach(product => { %>
+                        <div class="col-6 col-md-4 col-xl-3 fade-in">
+                            <%- include('products/_card', { product, back, showReason: true }); %>
+                        </div>
+                    <% }) %>
+                </div>
+            <% } else { %>
+                <div class="surface empty-state">
+                    <i class="bi bi-stars empty-icon"></i>
+                    <h3 class="h5">No recommendations yet</h3>
+                    <p class="mb-3">Browse the catalog to get personal picks.</p>
+                    <a href="/products" class="btn btn-brand">Go to catalog</a>
+                </div>
+            <% } %>
+        </section>
+    <% } %>
+
+    <section class="mb-5">
+        <div class="section-title">
+            <h2>Trending now</h2>
+            <a href="/products?sort=rating" class="small fw-medium">Most reviewed <i class="bi bi-arrow-right"></i></a>
+        </div>
+        <div class="row g-3 g-xl-4">
+            <% trending.forEach(product => { %>
+                <div class="col-6 col-md-4 col-xl-3"><%- include('products/_card', { product, back, showReason: false }); %></div>
+            <% }) %>
+        </div>
+    </section>
+
+    <section class="surface surface-pad">
+        <h2 class="h5 mb-3">How recommendations work</h2>
+        <div class="row g-3">
+            <div class="col-md-4 how-step"><span class="num">1</span><span>We record what you <strong>view</strong>, <strong>rate</strong> and <strong>buy</strong>. Purchases and high ratings count the most.</span></div>
+            <div class="col-md-4 how-step"><span class="num">2</span><span>Products that the same shoppers keep choosing together are <strong>similar</strong> (item-based collaborative filtering).</span></div>
+            <div class="col-md-4 how-step"><span class="num">3</span><span>You get products similar to the ones you liked recently, excluding what you have already seen.</span></div>
+        </div>
+        <% if (userStatus === 'admin') { %>
+            <hr>
+            <form action="/recommendations/rebuild" method="POST" class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <input type="hidden" name="back" value="<%= back %>">
+                <span class="small text-muted"><i class="bi bi-gear me-1"></i>Admin: the similarity matrix is rebuilt automatically every hour. JSON API: <code>/api/recommendations</code></span>
+                <button type="submit" class="btn btn-outline-brand btn-sm" data-loading-text="Rebuilding…"><i class="bi bi-arrow-repeat me-1"></i>Rebuild now</button>
+            </form>
+        <% } %>
+    </section>
+</main>
+
+<%- include('templates/footer'); %>
+</body>
+</html>

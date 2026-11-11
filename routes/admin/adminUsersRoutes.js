@@ -5,13 +5,13 @@ const router = express.Router();
 const adminCode = 'admin1243'
 
 router.get("/", async (req, res) => {
-    if(req.session.userStatus === 'user'){
-        return res.render("/");
+    if (req.session.userStatus !== 'admin') {
+        req.flash("warning", "This page is for administrators only");
+        return res.redirect(req.session.userId ? "/" : "/auth/login");
     }
 
     try{
-        const users = await User.find();
-        if(!users) return res.render("templates/error", {errorMessage: "No users found"});
+        const users = await User.find({}, 'username email role createdAt purchase_history.order_id').sort({ createdAt: -1 }).lean();
         res.render("admin/users_admin", { users: users });
     } catch(err) {
         return res.render("templates/error", {errorMessage: "Error getting users: " + err});
@@ -27,23 +27,19 @@ router.post("/", async (req, res) => {
         }
 
         if (!username || !email || !password || !role) {
-            return res.render("templates/error", {errorMessage: "All fields are required" });
+            req.flash("error", "All fields are required");
+            return res.redirect(303, "/users/admin");
         }
 
-        const newUser = new User({
-            username,
-            email,
-            password,
-            role,
-            secretCode,
-        });
-
-        await newUser.save();
-        res.redirect("/users/admin");
+        const newUser = await User.create({ username, email, password, role });
+        await Cart.create({ user_id: newUser._id.toString(), products: [] });
+        req.flash("success", `User ${username} created`);
+        res.redirect(303, "/users/admin");
 
     } catch (err) {
         console.error("Error creating user:", err);
-        res.render("templates/error", {errorMessage: "Server error: " + err.message });
+        req.flash("error", err.code === 11000 ? "This email is already registered" : "Could not create the user: " + err.message);
+        res.redirect(303, "/users/admin");
     }
 });
 
@@ -54,28 +50,30 @@ router.put('/:id', async (req, res) => {
         return res.render("templates/error", {errorMessage: "Unauthorized. Please, login to admin" });
     }
 
-    if (role === 'admin' && secretCode !== adminCode) {
-        return res.status(400).json({ errorMessage:'Invalid code'});
+    if (!['user', 'admin'].includes(role)) {
+        return res.status(400).json({ errorMessage: 'Invalid role' });
     }
 
     try {
-        const updateData = {
-            username: username,
-            email: email,
-            role: role,
-            updatedAt: new Date(),};
+        const current = await User.findById(req.params.id, 'role').lean();
+        if (!current) return res.status(404).json({ errorMessage: 'User not found' });
 
-        const updatedUser = await User.findByIdAndUpdate(req.params.id, updateData);
-        if (updatedUser === null) {
-            return res.status(401).json({ errorMessage: 'Error updating user'});
+        // The secret code is needed only to grant the admin role, not to edit an existing admin
+        if (role === 'admin' && current.role !== 'admin' && secretCode !== adminCode) {
+            return res.status(400).json({ errorMessage: 'Invalid admin code' });
         }
 
-        req.session.userStatus = role;
-        req.session.username = username;
-        res.status(200).json({ errorMessage: 'Successfully update user!'});
+        await User.findByIdAndUpdate(req.params.id, { username, email, role }, { runValidators: true });
+
+        // Only when admins edit their own account does their session change
+        if (String(req.params.id) === String(req.session.userId)) {
+            req.session.userStatus = role;
+            req.session.username = username;
+        }
+        res.status(200).json({ message: 'User updated' });
     } catch (err) {
         console.error(err);
-        res.status(500).json({ errorMessage:'Error updating user.'});
+        res.status(500).json({ errorMessage: err.code === 11000 ? 'This email is already used' : 'Error updating user.' });
     }
 });
 

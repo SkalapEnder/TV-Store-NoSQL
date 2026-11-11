@@ -1,0 +1,62 @@
+<%
+  // Product card. Locals: product, back (URL to return to after "add to cart"), isLoggedIn
+  const pic = (product.pictures || [])[0];
+  const inStock = product.quantity > 0;
+  const avg = product.rating_avg;
+%>
+<article class="product-card">
+    <% if (!inStock) { %>
+        <span class="pc-badge badge-soft badge-out">Out of stock</span>
+    <% } else if (product.quantity <= 5) { %>
+        <span class="pc-badge badge-soft badge-neutral">Only <%= product.quantity %> left</span>
+    <% } %>
+    <a class="pc-media" href="/products/<%= product.product_id %>" tabindex="-1" aria-hidden="true">
+        <% if (pic) { %>
+            <img src="<%= pic %>" alt="" loading="lazy">
+        <% } else { %>
+            <span class="d-flex h-100 align-items-center justify-content-center text-muted"><i class="bi bi-tv fs-1"></i></span>
+        <% } %>
+    </a>
+    <div class="pc-body">
+        <span class="pc-brand"><%= product.brand?.name || '' %></span>
+        <h3 class="pc-title"><a href="/products/<%= product.product_id %>"><%= product.name %></a></h3>
+        <div class="pc-specs">
+            <% if (product.diagonal) { %><span class="spec-pill"><i class="bi bi-aspect-ratio"></i><%= product.diagonal %>″</span><% } %>
+            <% if (product.category?.name) { %><span class="spec-pill"><%= product.category.name %></span><% } %>
+        </div>
+        <div class="rating-line mt-1">
+            <% if (avg) { %>
+                <span class="stars"><% for (let i = 1; i <= 5; i++) { %><i class="bi <%= avg >= i - 0.25 ? 'bi-star-fill' : (avg >= i - 0.75 ? 'bi-star-half' : 'bi-star off') %>"></i><% } %></span>
+                <span><%= avg.toFixed(1) %> (<%= product.rating_count %>)</span>
+            <% } else { %>
+                <span>No reviews yet</span>
+            <% } %>
+        </div>
+        <% if (product.reason && (typeof showReason === 'undefined' || showReason)) {
+            const r = product.reason;
+            const verb = { viewed: 'Because you viewed', rated: 'Because you liked', bought: 'Because you bought' }[r.type]; %>
+            <% if (verb && r.name) { %>
+                <div class="pc-reason" title="<%= verb %> <%= r.name %>"><i class="bi bi-stars"></i><span><%= verb %> <strong><%= r.name %></strong></span></div>
+            <% } else if (r.type === 'similar-users') { %>
+                <div class="pc-reason"><i class="bi bi-people"></i><span>Popular with shoppers like you</span></div>
+            <% } else if (r.type === 'popular' && typeof showReason !== 'undefined' && showReason) { %>
+                <div class="pc-reason"><i class="bi bi-graph-up-arrow"></i><span>Trending now</span></div>
+            <% } %>
+        <% } %>
+    </div>
+    <div class="pc-footer">
+        <div class="price price-lg"><%= Number(product.price).toLocaleString('ru-RU') %><small>₸</small></div>
+        <% if (inStock && isLoggedIn) { %>
+            <form action="/cart/add" method="POST">
+                <input type="hidden" name="product_id" value="<%= product.product_id %>">
+                <input type="hidden" name="quantity" value="1">
+                <input type="hidden" name="back" value="<%= typeof back !== 'undefined' ? back : '/products' %>">
+                <button type="submit" class="btn btn-brand btn-icon" title="Add to cart" aria-label="Add <%= product.name %> to cart">
+                    <i class="bi bi-bag-plus"></i>
+                </button>
+            </form>
+        <% } else if (inStock) { %>
+            <a href="/auth/login" class="btn btn-outline-brand btn-icon" title="Log in to buy" aria-label="Log in to buy"><i class="bi bi-bag-plus"></i></a>
+        <% } %>
+    </div>
+</article>

@@ -1,100 +1,218 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title><%= product.name %></title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <style>
-        body {
-            background-color: #f8f9fa;
-        }
-        .product-container {
-            max-width: 900px;
-        }
-        .carousel img {
-            max-height: 400px;
-            object-fit: contain;
-        }
-    </style>
+    <%- include('../templates/head', { title: product.name }); %>
 </head>
 <body>
+<%- include('../templates/navbar', { active: 'catalog' }); %>
+<%
+  const pictures = (product.pictures || []).filter(Boolean);
+  const inStock = product.quantity > 0;
+  const avg = product.rating_avg;
+  const fmt = n => Number(n).toLocaleString('ru-RU');
+%>
 
-<%- include('../templates/navbar'); %>
+<main class="container page">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/">Home</a></li>
+            <li class="breadcrumb-item"><a href="/products">Televisions</a></li>
+            <% if (product.category?.id) { %>
+                <li class="breadcrumb-item"><a href="/products?category_id=<%= product.category.id %>"><%= product.category.name %></a></li>
+            <% } %>
+            <li class="breadcrumb-item active text-truncate" style="max-width: 280px" aria-current="page"><%= product.model %></li>
+        </ol>
+    </nav>
 
-<div class="container product-container bg-white shadow rounded my-5 p-5">
-    <h2 class="text-center"><%= product.name %></h2>
-
-    <!-- Image Carousel -->
-    <div id="productCarousel" class="carousel slide mb-4" data-bs-ride="carousel">
-        <div class="carousel-inner">
-            <% product.pictures.forEach((picture, index) => { %>
-                <div class="carousel-item <%= index === 0 ? 'active' : '' %>">
-                    <img src="<%= picture %>" class="d-block w-100" alt="<%= product.name %>">
+    <div class="row g-4 g-xl-5">
+        <!-- Gallery -->
+        <div class="col-lg-7">
+            <div class="gallery-main">
+                <% if (pictures.length) { %>
+                    <img id="gallery-main-img" src="<%= pictures[0] %>" alt="<%= product.name %>">
+                <% } else { %>
+                    <i class="bi bi-tv text-muted" style="font-size: 5rem"></i>
+                <% } %>
+            </div>
+            <% if (pictures.length > 1) { %>
+                <div class="gallery-thumbs">
+                    <% pictures.forEach((p, i) => { %>
+                        <button type="button" class="<%= i === 0 ? 'active' : '' %>" data-gallery-thumb data-src="<%= p %>" aria-label="Picture <%= i + 1 %>">
+                            <img src="<%= p %>" alt="" loading="lazy">
+                        </button>
+                    <% }) %>
                 </div>
-            <% }); %>
+            <% } %>
         </div>
-        <button class="carousel-control-prev" type="button" data-bs-target="#productCarousel" data-bs-slide="prev">
-            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-        </button>
-        <button class="carousel-control-next" type="button" data-bs-target="#productCarousel" data-bs-slide="next">
-            <span class="carousel-control-next-icon" aria-hidden="true"></span>
-        </button>
+
+        <!-- Buy box -->
+        <div class="col-lg-5">
+            <div class="buy-box">
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <% if (product.brand?.id) { %>
+                        <a href="/products?brand_id=<%= product.brand.id %>" class="small-caps"><%= product.brand.name %></a>
+                    <% } %>
+                    <% if (product.category?.name) { %><span class="badge-soft badge-neutral"><%= product.category.name %></span><% } %>
+                </div>
+                <h1 class="product-title"><%= product.name %></h1>
+
+                <div class="d-flex align-items-center gap-3 mb-3 small text-muted">
+                    <a href="#reviews" class="rating-line text-decoration-none">
+                        <% if (avg) { %>
+                            <span class="stars"><% for (let i = 1; i <= 5; i++) { %><i class="bi <%= avg >= i - 0.25 ? 'bi-star-fill' : (avg >= i - 0.75 ? 'bi-star-half' : 'bi-star off') %>"></i><% } %></span>
+                            <span><%= avg.toFixed(1) %> · <%= product.rating_count %> <%= product.rating_count === 1 ? 'review' : 'reviews' %></span>
+                        <% } else { %>
+                            <span class="stars"><i class="bi bi-star off"></i><i class="bi bi-star off"></i><i class="bi bi-star off"></i><i class="bi bi-star off"></i><i class="bi bi-star off"></i></span>
+                            <span>No reviews yet</span>
+                        <% } %>
+                    </a>
+                    <span>Model: <span class="text-body"><%= product.model %></span></span>
+                </div>
+
+                <div class="surface surface-pad">
+                    <div class="price price-xl"><%= fmt(product.price) %><small>₸</small></div>
+                    <div class="mt-2 mb-3">
+                        <% if (!inStock) { %>
+                            <span class="badge-soft badge-out"><i class="bi bi-x-circle me-1"></i>Out of stock</span>
+                        <% } else if (product.quantity <= 5) { %>
+                            <span class="badge-soft badge-stock"><i class="bi bi-check-circle me-1"></i>In stock · only <%= product.quantity %> left</span>
+                        <% } else { %>
+                            <span class="badge-soft badge-stock"><i class="bi bi-check-circle me-1"></i>In stock</span>
+                        <% } %>
+                    </div>
+
+                    <% if (inStock && isLoggedIn) { %>
+                        <form action="/cart/add" method="POST" class="d-flex gap-2">
+                            <input type="hidden" name="product_id" value="<%= product.product_id %>">
+                            <input type="hidden" name="back" value="<%= back %>">
+                            <div class="input-group qty-input">
+                                <button class="btn btn-outline-brand px-2" type="button" onclick="this.nextElementSibling.stepDown()" aria-label="Less"><i class="bi bi-dash"></i></button>
+                                <input type="number" class="form-control px-1" name="quantity" value="1" min="1" max="<%= product.quantity %>" aria-label="Quantity">
+                                <button class="btn btn-outline-brand px-2" type="button" onclick="this.previousElementSibling.stepUp()" aria-label="More"><i class="bi bi-plus"></i></button>
+                            </div>
+                            <button type="submit" class="btn btn-brand btn-lg flex-grow-1" data-loading-text="Adding…"><i class="bi bi-bag-plus me-2"></i>Add to cart</button>
+                        </form>
+                    <% } else if (inStock) { %>
+                        <a href="/auth/login" class="btn btn-brand btn-lg w-100"><i class="bi bi-box-arrow-in-right me-2"></i>Log in to buy</a>
+                    <% } else { %>
+                        <button class="btn btn-brand btn-lg w-100" disabled>Currently unavailable</button>
+                    <% } %>
+                    <% if (product.url) { %>
+                        <a href="<%= product.url %>" target="_blank" rel="noopener" class="btn btn-ghost btn-sm w-100 mt-2">View at the supplier <i class="bi bi-box-arrow-up-right ms-1"></i></a>
+                    <% } %>
+                </div>
+
+                <ul class="perk-list mt-4">
+                    <li><i class="bi bi-truck"></i><div><strong class="d-block text-body">Free delivery</strong>Delivered and installed in 1–3 days</div></li>
+                    <li><i class="bi bi-shield-check"></i><div><strong class="d-block text-body">Official warranty</strong>Manufacturer's warranty and service</div></li>
+                    <li><i class="bi bi-arrow-repeat"></i><div><strong class="d-block text-body">14-day returns</strong>Changed your mind? Return it easily</div></li>
+                </ul>
+            </div>
+        </div>
     </div>
 
-    <!-- Product Details -->
-    <table class="table table-striped">
-        <tbody>
-        <tr class="fs-5">
-            <th scope="row">Model</th>
-            <td><%= product.model %></td>
-        </tr>
-        <tr class="fs-5">
-            <th scope="row">Type</th>
-            <td><%= product.category.name %></td>
-        </tr>
-        <tr class="fs-5">
-            <th scope="row">Price</th>
-            <td><%= product.price %> KZT</td>
-        </tr>
-        <tr class="fs-5">
-            <th scope="row">Brand</th>
-            <td><%= product.brand.name %></td>
-        </tr>
-        <tr class="fs-5">
-            <th scope="row">Description</th>
-            <td><%= product.description || 'No description available' %></td>
-        </tr>
-        <tr class="fs-5">
-            <th scope="row">Diagonal</th>
-            <td><%= product.diagonal ? product.diagonal + ' inches' : 'Unknown' %></td>
-        </tr>
-        <tr class="fs-5">
-            <th scope="row">Availability</th>
-            <td>
-                    <span class="badge fs-6 <%= parseInt(product.quantity) > 0 ? 'bg-success' : 'bg-danger' %>">
-                        <%= parseInt(product.quantity) > 0 ? product.quantity : 'Out of Stock' %>
-                    </span>
-            </td>
-        </tr>
-        </tbody>
-    </table>
+    <!-- Details -->
+    <section class="mt-5">
+        <ul class="nav nav-tabs mb-4" role="tablist">
+            <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-specs" type="button" role="tab">Specifications</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-desc" type="button" role="tab">Description</button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="reviews-tab" data-bs-toggle="tab" data-bs-target="#reviews" type="button" role="tab">Reviews<% if (product.rating_count) { %> (<%= product.rating_count %>)<% } %></button></li>
+        </ul>
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="tab-specs" role="tabpanel">
+                <div class="row">
+                    <div class="col-lg-8">
+                        <table class="spec-table">
+                            <tr><th>Brand</th><td><%= product.brand?.name || '—' %></td></tr>
+                            <tr><th>Model</th><td><%= product.model %></td></tr>
+                            <tr><th>Display type</th><td><%= product.category?.name || '—' %></td></tr>
+                            <tr><th>Screen size</th><td><%= product.diagonal ? product.diagonal + '″ (' + Math.round(product.diagonal * 2.54) + ' cm)' : '—' %></td></tr>
+                            <tr><th>Price</th><td><%= fmt(product.price) %> ₸</td></tr>
+                            <tr><th>Availability</th><td><%= inStock ? product.quantity + ' pcs' : 'Out of stock' %></td></tr>
+                            <tr><th>Product code</th><td><%= product.product_id %></td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="tab-desc" role="tabpanel">
+                <div class="col-lg-8 text-body" style="white-space: pre-line"><%= product.description || 'No description available.' %></div>
+            </div>
+            <div class="tab-pane fade" id="reviews" role="tabpanel">
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <div class="surface surface-pad rating-summary text-center">
+                            <div class="big"><%= avg ? avg.toFixed(1) : '—' %></div>
+                            <div class="stars my-2 fs-5"><% for (let i = 1; i <= 5; i++) { %><i class="bi <%= avg && avg >= i - 0.25 ? 'bi-star-fill' : (avg && avg >= i - 0.75 ? 'bi-star-half' : 'bi-star off') %>"></i><% } %></div>
+                            <div class="text-muted small">Based on <%= product.rating_count || 0 %> <%= product.rating_count === 1 ? 'rating' : 'ratings' %></div>
+                        </div>
+                    </div>
+                    <div class="col-md-8">
+                        <div class="surface surface-pad h-100">
+                            <% if (isLoggedIn) { %>
+                                <h3 class="h5 mb-1"><%= userRating ? 'Your rating' : 'Rate this TV' %></h3>
+                                <p class="text-muted small mb-3"><%= userRating ? 'You can change your rating at any time.' : 'Your rating helps other customers and improves your recommendations.' %></p>
+                                <form action="/products/<%= product.product_id %>/rate" method="POST" class="d-flex flex-wrap align-items-center gap-3">
+                                    <div class="star-input" role="radiogroup" aria-label="Rating">
+                                        <% for (let i = 5; i >= 1; i--) { %>
+                                            <input type="radio" id="star<%= i %>" name="rating" value="<%= i %>" <%= userRating === i ? 'checked' : '' %> required>
+                                            <label for="star<%= i %>" title="<%= i %> of 5"><i class="bi bi-star-fill"></i></label>
+                                        <% } %>
+                                    </div>
+                                    <button type="submit" class="btn btn-brand"><%= userRating ? 'Update rating' : 'Submit rating' %></button>
+                                </form>
+                            <% } else { %>
+                                <h3 class="h5 mb-1">Share your opinion</h3>
+                                <p class="text-muted mb-3">Log in to rate this TV.</p>
+                                <a href="/auth/login" class="btn btn-outline-brand">Log in</a>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 
-    <!-- View Product Button -->
-    <div class="d-flex justify-content-between text-center">
-        <a href="<%= product.url %>" class="btn btn-primary fs-5">View Product</a>
-        <% if (product.quantity > 0) {%>
-            <form action="/cart/add" method="POST">
-                <input type="hidden" name="user_id" value="<%= userId %>">
-                <input type="hidden" name="product_id" value="<%= product.product_id %>">
-                <input type="hidden" name="quantity" value="1">
-                <button type="submit" class="btn btn-primary fs-5">Add to Cart</button>
-            </form>
-        <% } %>
-    </div>
-</div>
+    <!-- Collaborative filtering: customers who viewed this also viewed -->
+    <% if (typeof alsoViewed !== 'undefined' && alsoViewed && alsoViewed.length) { %>
+        <section class="mt-5">
+            <div class="section-title">
+                <div>
+                    <h2 class="mb-1">Customers who viewed this also viewed</h2>
+                    <p class="text-muted small mb-0">Based on what other shoppers looked at, rated and bought</p>
+                </div>
+                <a href="/recommendations" class="small fw-medium">More for you <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="row g-3 g-xl-4">
+                <% alsoViewed.forEach(p => { %>
+                    <div class="col-6 col-lg-3"><%- include('_card', { product: p, back }); %></div>
+                <% }) %>
+            </div>
+        </section>
+    <% } %>
+
+    <!-- Related -->
+    <% if (related && related.length) { %>
+        <section class="mt-5">
+            <div class="section-title">
+                <h2>Similar <%= product.category?.name || '' %> TVs</h2>
+                <a href="/products?category_id=<%= product.category?.id %>" class="small fw-medium">See all <i class="bi bi-arrow-right"></i></a>
+            </div>
+            <div class="row g-3 g-xl-4">
+                <% related.forEach(p => { %>
+                    <div class="col-6 col-lg-3"><%- include('_card', { product: p, back }); %></div>
+                <% }) %>
+            </div>
+        </section>
+    <% } %>
+</main>
 
 <%- include('../templates/footer'); %>
-
+<script>
+    // Open the Reviews tab when the page is opened with #reviews (e.g. after rating)
+    if (location.hash === '#reviews') {
+        const tab = document.getElementById('reviews-tab');
+        if (tab) { bootstrap.Tab.getOrCreateInstance(tab).show(); tab.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    }
+</script>
 </body>
 </html>

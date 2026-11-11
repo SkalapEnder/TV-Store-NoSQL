@@ -1,0 +1,16 @@
+<% if (products.length > 0) { %>
+    <div class="row g-3 g-xl-4">
+        <% products.forEach(product => { %>
+            <div class="col-6 col-md-4 col-xxl-3 fade-in">
+                <%- include('_card', { product, back }); %>
+            </div>
+        <% }) %>
+    </div>
+<% } else { %>
+    <div class="surface empty-state">
+        <i class="bi bi-search empty-icon"></i>
+        <h3 class="h5">Nothing found</h3>
+        <p class="mb-3">Try a different search or remove some filters.</p>
+        <a href="/products" class="btn btn-outline-brand">Reset filters</a>
+    </div>
+<% } %>

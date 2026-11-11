@@ -6,17 +6,17 @@ const { updateDailyTVProducts } = require("../../scripts/scraper");
 const router = express.Router();
 
 router.get("/", async (req, res) => {
-    if(req.session.userStatus === 'user'){
-        return res.render("/");
+    if (req.session.userStatus !== 'admin') {
+        req.flash("warning", "This page is for administrators only");
+        return res.redirect(req.session.userId ? "/" : "/auth/login");
     }
 
     try {
-        const products = await Product.find();
-        const brands = await Brand.find();
-        const categories = await Category.find();
-        if (!products || !brands || !categories) {
-            return res.render("templates/error", { errorMessage: "No products, brands or categories found" });
-        }
+        const [products, brands, categories] = await Promise.all([
+            Product.find().sort({ product_id: 1 }).lean(),
+            Brand.find({}, "brand_id brand_name").sort({ brand_name: 1 }).lean(),
+            Category.find({}, "category_id category_name").sort({ category_name: 1 }).lean()
+        ]);
         res.render("admin/products_admin", { products, brands, categories });
     } catch (err) {
         res.render("templates/error", { errorMessage: "Error getting products: " + err });
@@ -42,7 +42,12 @@ router.post("/", async (req, res) => {
         const categoryData = await Category.findOne({ category_id: category }).select("category_id category_name");
 
         if (!brandData || !categoryData) {
-            return res.render("templates/error", { errorMessage: "Invalid brand or category" });
+            req.flash("error", "Invalid brand or category");
+            return res.redirect(303, "/products/admin");
+        }
+        if (await Product.exists({ product_id })) {
+            req.flash("error", `Product ID ${product_id} is already used`);
+            return res.redirect(303, "/products/admin");
         }
 
         // Create new product with brand & category details
@@ -67,10 +72,12 @@ router.post("/", async (req, res) => {
         });
 
         await newProduct.save();
-        res.redirect("/products/admin");
+        req.flash("success", `Product “${name}” added`);
+        res.redirect(303, "/products/admin");
     } catch (err) {
         console.error("Error creating product:", err);
-        res.status(500).send("Error creating product");
+        req.flash("error", "Could not create the product: " + err.message);
+        res.redirect(303, "/products/admin");
     }
 });
 
@@ -102,17 +109,18 @@ router.delete("/:id", async (req, res) => {
 });
 
 router.post("/scrape", async (req, res) => {
+    if (req.session.userStatus !== "admin") {
+        req.flash("warning", "This action is for administrators only");
+        return res.redirect(303, "/");
+    }
     try {
-        await updateDailyTVProducts();
-        res.json({ message: "Scraping started successfully!" });
+        const total = await updateDailyTVProducts();
+        req.flash("success", `Import finished: ${total} products in the catalog`);
     } catch (err) {
         console.error("Scraping error:", err);
-
-        // Make sure to send only ONE response
-        if (!res.headersSent) {
-            res.status(500).json({ error: "Failed to start scraping." });
-        }
+        req.flash("error", "Import failed: " + err.message);
     }
+    res.redirect(303, "/products/admin");
 });
 
 module.exports = router;

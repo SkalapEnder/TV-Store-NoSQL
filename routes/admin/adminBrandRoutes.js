@@ -5,11 +5,15 @@ const router = express.Router();
 
 // Route to get all brands and render brands_admin.ejs
 router.get("/", async (req, res) => {
+    if (req.session.userStatus !== "admin") {
+        req.flash("warning", "This page is for administrators only");
+        return res.redirect(req.session.userId ? "/" : "/auth/login");
+    }
     try {
-        const brands = await Brand.find();
+        const brands = await Brand.find().sort({ brand_name: 1 }).lean();
         res.render("admin/brands_admin", { brands });
     } catch (err) {
-        res.status(500).json({ error: "Failed to fetch brands" });
+        res.status(500).render("templates/error", { errorMessage: "Failed to fetch brands" });
     }
 });
 
@@ -21,11 +25,15 @@ router.post("/", async (req, res) => {
         }
 
         const { brand_id, name, description, headquarters, website, founded_year } = req.body;
-        if (!brand_id || !name) return res.render('templates/error',{ errorMessage: "Brand name and id is required" });
+        if (!brand_id || !name) {
+            req.flash("error", "Brand name and ID are required");
+            return res.redirect(303, "/brands/admin");
+        }
 
-        const existingBrand = await Brand.findOne({ brand_id: brand_id });
+        const existingBrand = await Brand.findOne({ $or: [{ brand_id }, { brand_name: name }] });
         if (existingBrand) {
-            return res.render('templates/error',{ errorMessage: "Brand ID already exists" });
+            req.flash("error", "A brand with this ID or name already exists");
+            return res.redirect(303, "/brands/admin");
         }
 
         const newBrand = new Brand({
@@ -38,9 +46,11 @@ router.post("/", async (req, res) => {
         });
         await newBrand.save();
 
-        res.redirect("/brands/admin");
+        req.flash("success", `Brand “${name}” created`);
+        res.redirect(303, "/brands/admin");
     } catch (err) {
-        return res.render('templates/error',{ errorMessage: "Failed to create brand" });
+        req.flash("error", "Failed to create brand: " + err.message);
+        res.redirect(303, "/brands/admin");
     }
 });
 
@@ -53,8 +63,8 @@ router.put("/:id", async (req, res) => {
 
         const { brand_id, name, description, headquarters, founded_year, website } = req.body;
 
-        if (!brand_id || !name || !description || !headquarters || !founded_year || !website) {
-            return res.status(400).json({ error: "Missing required fields" });
+        if (!brand_id || !name) {
+            return res.status(400).json({ error: "Brand name is required" });
         }
 
         // Find and update the brand
@@ -64,7 +74,7 @@ router.put("/:id", async (req, res) => {
                 brand_name: name,
                 brand_description: description,
                 headquarters,
-                founded_year,
+                founded_year: founded_year || undefined,
                 website,
             },
             {new: true}
@@ -76,10 +86,9 @@ router.put("/:id", async (req, res) => {
 
         // Update brand name in all relevant products
         await Product.updateMany(
-            { "brand.id": req.params.id },
+            { "brand.id": parseInt(req.params.id) },
             { $set: { "brand.name": name } }
         );
-        console.log('Here!')
         res.status(200).json({ message: "Brand updated successfully" });
     } catch (err) {
         console.error("Error updating brand:", err);

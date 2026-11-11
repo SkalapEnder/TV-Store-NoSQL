@@ -1,162 +1,149 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>User Management</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <style>
-        body {
-            background-color: #dbdbdb;
-        }
-    </style>
+    <%- include('../templates/head', { title: 'User management' }); %>
 </head>
 <body>
 <%- include('../templates/navbar'); %>
+<% const admins = users.filter(u => u.role === 'admin').length; %>
 
-<div class="container-fluid w-75 mt-5 p-5 bg-white shadow rounded text-center">
-    <h2>User Management</h2>
-    <hr>
-    <h3>Create User</h3>
-    <form action="/users/admin" method="POST">
-        <div class="form-floating w-50 mx-auto">
-            <input type="text" class="form-control my-3" id="username" name="username" required>
-            <label for="username" class="fs-6">Name</label>
-        </div>
+<main class="container-xxl page">
+    <%- include('../templates/admin_header', { section: 'users', heading: 'Users', subtitle: users.length + ' accounts · ' + admins + ' administrators' }); %>
 
-        <div class="form-floating w-50 mx-auto">
-            <input type="email" class="form-control my-3" id="email" name="email" required>
-            <label for="email" class="fs-6">Email</label>
-        </div>
-
-        <div class="form-floating w-50 mx-auto">
-            <input type="password" class="form-control my-3" id="password" name="password" required>
-            <label for="password" class="fs-6">Password</label>
-        </div>
-
-        <select id="role" name="role" class="form-select w-50 mx-auto" required onchange="toggleSecretCode()">
-            <option value="user">Visitor</option>
-            <option value="admin">Admin</option>
-        </select><br>
-
-        <div id="secretCodeDiv" style="display: none;" class="form-floating mb-4 mt-0 w-50 mx-auto">
-            <input type="password" class="form-control my-3" id="secretCode" name="secretCode">
-            <label for="secretCode" class="fs-6">Secret Code</label>
-        </div>
-
-        <button type="submit" id="submit" class="btn btn-outline-success fs-4">Create User</button>
-    </form>
-    <hr>
-    <div class="alert alert-danger my-3" style="display: none" id="error"></div>
-
-    <h3 class="mt-4">List of Users</h3>
-    <table class="table table-striped mt-4">
-        <thead>
-        <tr>
-            <th>ID</th>
-            <th>Username</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Code</th>
-            <th>Created At</th>
-            <th>Updated At</th>
-            <th>Actions</th>
-        </tr>
-        </thead>
-        <tbody>
-        <% users.forEach(user => { %>
-            <tr data-user-id="<%= user._id %>">
-                <td><%= user._id %></td>
-                <td><input type="text" class="form-control username" value="<%= user.username %>"></td>
-                <td><input type="text" class="form-control email" value="<%= user.email %>"></td>
-                <td>
-                    <select class="form-select role">
-                        <option value="admin" <%= user.role === 'admin' ? 'selected' : '' %>>Admin</option>
-                        <option value="user" <%= user.role === 'user' ? 'selected' : '' %>>User</option>
+    <details class="surface surface-pad collapse-card mb-4">
+        <summary>
+            <span class="d-flex align-items-center gap-2"><i class="bi bi-person-plus"></i><span class="fw-semibold">Create a user</span></span>
+            <i class="bi bi-chevron-down chev"></i>
+        </summary>
+        <form action="/users/admin" method="POST">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label for="username" class="form-label">Name *</label>
+                    <input type="text" class="form-control" id="username" name="username" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="email" class="form-label">Email *</label>
+                    <input type="email" class="form-control" id="email" name="email" required>
+                </div>
+                <div class="col-md-3">
+                    <label for="password" class="form-label">Password *</label>
+                    <input type="password" class="form-control" id="password" name="password" required autocomplete="new-password">
+                </div>
+                <div class="col-md-3">
+                    <label for="role" class="form-label">Role</label>
+                    <select id="role" name="role" class="form-select" required>
+                        <option value="user">Customer</option>
+                        <option value="admin">Administrator</option>
                     </select>
-                </td>
-                <td>
-                    <input type="text" class="form-control secret-code" placeholder="Enter secret code" value="<%= user.secretCode || '' %>">
-                </td>
-                <td><%= new Date(user.createdAt).toLocaleString() %></td>
-                <td><%= new Date(user.updatedAt).toLocaleString() %></td>
-                <td>
-                    <button class="btn btn-success btn-sm mb-3 me-3" onclick="updateUser('<%= user._id%>')">Update</button>
-                    <button class="btn btn-danger btn-sm mb-3 me-3" onclick="deleteUser('<%= user._id%>')">Delete</button>
-                </td>
+                </div>
+                <div class="col-12 d-flex justify-content-end">
+                    <button type="submit" class="btn btn-brand"><i class="bi bi-plus-lg me-1"></i>Create user</button>
+                </div>
+            </div>
+        </form>
+    </details>
+
+    <div class="table-tools">
+        <div class="search">
+            <i class="bi bi-search"></i>
+            <input type="search" class="form-control" placeholder="Search by name or email…" data-table-search="usersTable">
+        </div>
+        <span class="text-muted small"><i class="bi bi-key me-1"></i>Granting the administrator role requires the secret code</span>
+    </div>
+
+    <div class="table-wrap">
+        <table class="table table-hover admin-table" id="usersTable" data-table data-page-size="20">
+            <thead>
+            <tr>
+                <th style="min-width: 220px">User</th>
+                <th style="min-width: 220px">Email</th>
+                <th style="min-width: 150px">Role</th>
+                <th style="min-width: 150px">Admin code</th>
+                <th>Orders</th>
+                <th>Registered</th>
+                <th class="text-end">Actions</th>
             </tr>
-        <% }); %>
-        </tbody>
-    </table>
-</div>
+            </thead>
+            <tbody>
+            <% users.forEach(user => {
+                const orders = new Set((user.purchase_history || []).map(p => p.order_id)).size; %>
+                <tr data-user-id="<%= user._id %>">
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="avatar"><%= String(user.username || '?').charAt(0) %></span>
+                            <div class="min-w-0 flex-grow-1">
+                                <input type="text" class="form-control username fw-medium" value="<%= user.username %>">
+                                <div class="col-id ps-2 text-truncate" style="max-width: 200px"><%= user._id %></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td><input type="email" class="form-control email" value="<%= user.email %>"></td>
+                    <td>
+                        <select class="form-select role">
+                            <option value="user" <%= user.role === 'user' ? 'selected' : '' %>>Customer</option>
+                            <option value="admin" <%= user.role === 'admin' ? 'selected' : '' %>>Administrator</option>
+                        </select>
+                    </td>
+                    <td><input type="password" class="form-control secret-code" placeholder="Only for admin" autocomplete="off"></td>
+                    <td class="small"><%= orders %></td>
+                    <td class="small text-muted text-nowrap"><%= new Date(user.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) %></td>
+                    <td class="actions">
+                        <button class="btn btn-brand btn-icon btn-sm" title="Save changes" onclick="updateUser('<%= user._id %>', this)"><i class="bi bi-check-lg"></i></button>
+                        <% if (String(user._id) !== String(userId)) { %>
+                            <button class="btn btn-soft-danger btn-icon btn-sm" title="Delete" onclick="deleteUser('<%= user._id %>')"><i class="bi bi-trash3"></i></button>
+                        <% } else { %>
+                            <span class="badge-soft badge-neutral ms-1">You</span>
+                        <% } %>
+                    </td>
+                </tr>
+            <% }); %>
+            </tbody>
+        </table>
+    </div>
+    <div class="pager" data-table-pager="usersTable"></div>
+</main>
 
 <%- include('../templates/footer'); %>
-
 <script>
-    async function updateUser(userId) {
+    async function updateUser(userId, btn) {
         const row = document.querySelector(`tr[data-user-id="${userId}"]`);
-        const username = row.querySelector(".username").value;
-        const email = row.querySelector(".email").value;
-        const role = row.querySelector(".role").value;
-        const secretCode = row.querySelector(".secret-code").value;
-
+        const get = sel => row.querySelector(sel).value;
+        btn.disabled = true;
         try {
             const response = await fetch(`/users/admin/${userId}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ username, email, role, secretCode })
+                body: JSON.stringify({ username: get(".username"), email: get(".email"), role: get(".role"), secretCode: get(".secret-code") })
             });
-            const data = await response.json();
-            if (response.ok) {
-                alert("User updated successfully!");
-                window.location.reload();
-            } else {
-                showError(data.errorMessage);
-            }
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.errorMessage || response.statusText);
+            row.classList.remove("dirty");
+            row.querySelector(".secret-code").value = "";
+            TVStore.notify("User saved");
         } catch (error) {
-            console.error("Error:", error);
-            showError("Error updating user.");
+            TVStore.notify("Could not save the user: " + error.message, "error");
+        } finally {
+            btn.disabled = false;
         }
     }
 
-    // Function to delete user
     async function deleteUser(userId) {
-        if (!confirm("Are you sure you want to delete this user?")) return;
-
+        const row = document.querySelector(`tr[data-user-id="${userId}"]`);
+        const ok = await TVStore.confirmDialog({
+            title: `Delete ${row.querySelector(".username").value}?`,
+            message: "The account, its history and cart will be deleted. This cannot be undone.",
+            confirmText: "Delete user"
+        });
+        if (!ok) return;
         try {
             const response = await fetch(`/users/admin/${userId}`, { method: "DELETE" });
-
-            if (response.ok) {
-                alert("User deleted successfully!");
-                location.reload();
-            } else {
-                showError('Error during deletion!' + response.status);
-            }
+            if (!response.ok) throw new Error();
+            TVStore.notifyAfterReload("User deleted");
+            location.reload();
         } catch (error) {
-            console.error("Error:", error);
-            showError("Error deleting user " + error);
-        }
-    }
-
-    // Function to show error messages
-    function showError(message) {
-        const errorElement = document.getElementById("error");
-        errorElement.innerText = message;
-        errorElement.style.display = "block";
-    }
-
-    function toggleSecretCode() {
-        const roleSelect = document.getElementById('role');
-        const secretCodeDiv = document.getElementById('secretCodeDiv');
-
-        if (roleSelect.value === 'admin') {
-            secretCodeDiv.style.display = 'block';
-        } else {
-            secretCodeDiv.style.display = 'none';
+            TVStore.notify("Could not delete the user", "error");
         }
     }
 </script>
-
 </body>
 </html>
-

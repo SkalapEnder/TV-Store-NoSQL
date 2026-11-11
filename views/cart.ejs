@@ -1,61 +1,104 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Cart</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <style>
-        body{
-            background-color: #dbdbdb;
-        }
-    </style>
+    <%- include('templates/head', { title: 'Cart' }); %>
 </head>
 <body>
-<%- include('./templates/navbar'); %>
+<%- include('templates/navbar'); %>
+<%
+  const fmt = n => Number(n || 0).toLocaleString('ru-RU');
+  const lines = (cart && cart.products) || [];
+  const itemCount = lines.reduce((s, l) => s + l.quantity, 0);
+  const subtotal = lines.reduce((s, l) => s + l.price * l.quantity, 0);
+  const problems = lines.filter(l => !stock[l.product_id] || stock[l.product_id].quantity < l.quantity);
+%>
 
-    <div class="container my-5 p-5 bg-white rounded shadow">
-        <h2 class="mb-4 text-center">🛒 Your Shopping Cart</h2>
-
-        <% if (!cart || cart.products.length === 0) { %>
-            <p class="text-center fs-4">Your cart is empty</p>
-        <% } else { %>
-            <table class="table table-bordered text-center">
-                <thead class="table-dark">
-                <tr>
-                    <th>Product</th>
-                    <th>Model</th>
-                    <th>Quantity</th>
-                    <th>Price</th>
-                    <th>Actions</th>
-                </tr>
-                </thead>
-                <tbody>
-                <% cart.products.forEach((item) => { %>
-                    <tr>
-                        <td><img src="<%= item.picture %>" class="img-fluid" style="max-width: 80px;"></td>
-                        <td><%= item.name %></td>
-                        <td><%= item.quantity %></td>
-                        <td><%= item.price * item.quantity %> KZT</td>
-                        <td>
-                            <form action="/cart/remove" method="POST">
-                                <input type="hidden" name="product_id" value="<%= item.product_id %>">
-                                <button type="submit" class="btn btn-danger">Remove</button>
-                            </form>
-                        </td>
-                    </tr>
-                <% }); %>
-                </tbody>
-            </table>
-
-            <div class="text-end mt-4">
-                <form action="/cart/purchase" method="POST">
-                    <button type="submit" class="btn btn-success btn-lg">Perform payment</button>
-                </form>
-            </div>
-        <% } %>
+<main class="container page">
+    <div class="page-header">
+        <div>
+            <h1 class="serif">Shopping cart</h1>
+            <p class="lead-text"><%= itemCount %> <%= itemCount === 1 ? 'item' : 'items' %></p>
+        </div>
+        <a href="/products" class="btn btn-ghost"><i class="bi bi-arrow-left me-1"></i> Continue shopping</a>
     </div>
 
-<%- include('./templates/footer'); %>
+    <% if (lines.length === 0) { %>
+        <div class="surface empty-state fade-in">
+            <i class="bi bi-bag empty-icon"></i>
+            <h3 class="h4">Your cart is empty</h3>
+            <p class="mb-4">Browse the catalog and add the TVs you like.</p>
+            <a href="/products" class="btn btn-brand btn-lg">Go to catalog</a>
+        </div>
+    <% } else { %>
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <div class="surface px-3 px-md-4 fade-in">
+                    <% lines.forEach(item => {
+                        const s = stock[item.product_id];
+                        const max = s ? s.quantity : 0; %>
+                        <div class="cart-line">
+                            <a href="/products/<%= item.product_id %>">
+                                <% if (item.picture) { %><img class="thumb" src="<%= item.picture %>" alt="" loading="lazy">
+                                <% } else { %><span class="thumb d-inline-flex align-items-center justify-content-center"><i class="bi bi-tv text-muted"></i></span><% } %>
+                            </a>
+                            <div class="flex-grow-1 min-w-0 cl-info">
+                                <% if (s && s.brand) { %><div class="small-caps mb-1"><%= s.brand.name %></div><% } %>
+                                <a class="cl-name d-block" href="/products/<%= item.product_id %>"><%= item.name %></a>
+                                <div class="small text-muted mt-1"><%= fmt(item.price) %> ₸ each</div>
+                                <% if (!s || max === 0) { %>
+                                    <div class="small mt-1" style="color: var(--danger)"><i class="bi bi-exclamation-circle me-1"></i>Out of stock</div>
+                                <% } else if (max < item.quantity) { %>
+                                    <div class="small mt-1" style="color: var(--warning)"><i class="bi bi-exclamation-triangle me-1"></i>Only <%= max %> left</div>
+                                <% } %>
+                            </div>
+                            <form action="/cart/update" method="POST" class="cl-qty" data-no-lock>
+                                <input type="hidden" name="product_id" value="<%= item.product_id %>">
+                                <div class="input-group input-group-sm" style="width: 112px">
+                                    <button class="btn btn-outline-brand" type="submit" name="quantity" value="<%= item.quantity - 1 %>" aria-label="Less"><i class="bi bi-dash"></i></button>
+                                    <span class="form-control text-center"><%= item.quantity %></span>
+                                    <button class="btn btn-outline-brand" type="submit" name="quantity" value="<%= item.quantity + 1 %>" aria-label="More" <%= item.quantity >= max ? 'disabled' : '' %>><i class="bi bi-plus"></i></button>
+                                </div>
+                            </form>
+                            <div class="text-end" style="min-width: 110px">
+                                <div class="price"><%= fmt(item.price * item.quantity) %><small>₸</small></div>
+                                <form action="/cart/remove" method="POST" class="mt-1">
+                                    <input type="hidden" name="product_id" value="<%= item.product_id %>">
+                                    <button type="submit" class="btn btn-link btn-sm p-0 text-muted text-decoration-none"><i class="bi bi-trash3 me-1"></i>Remove</button>
+                                </form>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="surface surface-pad buy-box fade-in">
+                    <h2 class="h5 mb-3">Order summary</h2>
+                    <div class="summary-row"><span>Items (<%= itemCount %>)</span><span><%= fmt(subtotal) %> ₸</span></div>
+                    <div class="summary-row"><span>Delivery</span><span style="color: var(--success)">Free</span></div>
+                    <div class="summary-row summary-total"><span>Total</span><span><%= fmt(subtotal) %> ₸</span></div>
+
+                    <% if (problems.length) { %>
+                        <div class="alert alert-warning mt-3 mb-0 small">Some items are not available in the requested quantity. Please update your cart.</div>
+                    <% } %>
+
+                    <form action="/cart/purchase" method="POST" class="mt-3"
+                          data-confirm="You are about to pay <%= fmt(subtotal) %> ₸ for <%= itemCount %> <%= itemCount === 1 ? 'item' : 'items' %>."
+                          data-confirm-title="Confirm your order" data-confirm-button="Pay now" data-confirm-danger="false">
+                        <button type="submit" class="btn btn-brand btn-lg w-100" <%= problems.length ? 'disabled' : '' %>>
+                            <i class="bi bi-lock me-2"></i>Checkout
+                        </button>
+                    </form>
+                    <ul class="perk-list mt-4 small">
+                        <li><i class="bi bi-shield-lock"></i><span>Secure payment</span></li>
+                        <li><i class="bi bi-truck"></i><span>Free delivery in 1–3 days</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    <% } %>
+</main>
+
+<%- include('templates/footer'); %>
 </body>
 </html>

@@ -43,10 +43,12 @@ async function recordPurchase(userId, items) {
     } catch (err) {
         // Give back any stock taken before the failure
         await Promise.all(
-            reserved.map(r => Product.updateOne({ product_id: r.product_id }, { $inc: { quantity: r.qty } }))
+            reserved.map(r => Product.updateOne({ product_id: r.productId }, { $inc: { quantity: r.qty } }))
         );
         throw err;
     }
+
+    require("./recommender").invalidateUser(userId);   // purchases change the recommendations
 
     const total = lines.reduce((sum, l) => sum + l.price * l.quantity, 0);
     return { orderId, total, items: lines };

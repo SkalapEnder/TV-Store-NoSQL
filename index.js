@@ -1,10 +1,14 @@
 const express = require('express');
+const path = require('path');
 const bodyParser = require('body-parser');
 const session = require('express-session');
 const methodOverride = require("method-override");
 const passport = require('passport');
 const connectDB = require("./scripts/db");
 const User = require('./models/User');
+const Cart = require('./models/Cart');
+const Product = require('./models/Product');
+const Category = require('./models/Category');
 
 //const adminRouter = require("./routes/admin/adminRoutes");
 const adminCategoryRouter = require("./routes/admin/adminCategoryRoutes");
@@ -18,14 +22,17 @@ const productRouter = require('./routes/user/productRoutes');
 const cartRouter = require('./routes/user/cartRoutes');
 const brandRouter = require('./routes/user/brandRoutes');
 const categoryRouter = require('./routes/user/categoryRoutes');
+const recommendationRouter = require('./routes/user/recommendationRoutes');
+const recommendationApi = require('./routes/api/recommendationRoutes');
+const reco = require('./scripts/recommender');
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public'), { maxAge: '1h' }));
 
 // Session middleware
 app.use(session({
@@ -40,6 +47,24 @@ app.use((req, res, next) => {
     res.locals.userStatus = req.session.userStatus || 'user';
     res.locals.username = req.session.username || 'Guest';
     res.locals.userId = req.session.userId || -1;
+
+    // One-time notification shown as a toast on the next page (set before a redirect)
+    req.flash = (type, message) => { req.session.flash = { type, message }; };
+    res.locals.flash = req.session.flash || null;
+    delete req.session.flash;
+    next();
+});
+
+// Number of items in the cart, for the badge in the header (only for HTML pages)
+app.use(async (req, res, next) => {
+    res.locals.cartCount = 0;
+    if (!req.session.userId || req.method !== 'GET' || !req.accepts('html')) return next();
+    try {
+        const cart = await Cart.findOne({ user_id: req.session.userId }, { 'products.quantity': 1 }).lean();
+        res.locals.cartCount = (cart?.products || []).reduce((sum, p) => sum + (p.quantity || 0), 0);
+    } catch (err) {
+        console.error('Cart badge error:', err.message);
+    }
     next();
 });
 app.use(passport.initialize());
@@ -47,17 +72,33 @@ app.use(passport.session());
 
 app.get('/', async (req, res) => {
     try {
-        let recentHistory = [];
-        if (req.session.userId) {
-            const user = await User.findById(req.session.userId).select('view_history').lean();
-            recentHistory = (user?.view_history || [])
-                .sort((a, b) => new Date(b.lastViewed) - new Date(a.lastViewed))
-                .slice(0, 5);
-        }
-        res.render('index', { recentHistory });
+        const [featured, categories, categoryCounts, user] = await Promise.all([
+            Product.find({ quantity: { $gt: 0 } })
+                .select('product_id name model price quantity diagonal brand category pictures rating_sum rating_count')
+                .sort({ rating_count: -1, price: -1 })
+                .limit(8)
+                .lean(),
+            Category.find({}, 'category_id category_name category_description').sort({ category_name: 1 }).lean(),
+            Product.aggregate([{ $group: { _id: '$category.id', count: { $sum: 1 } } }]),
+            req.session.userId ? User.findById(req.session.userId).select('view_history').lean() : null
+        ]);
+        // Personal recommendations (item-based collaborative filtering); the page still works without them
+        const recommended = req.session.userId
+            ? await reco.recommendForUser(req.session.userId, { limit: 4 }).catch(err => { console.error('Recommendations error:', err.message); return null; })
+            : null;
+
+        const counts = Object.fromEntries(categoryCounts.map(c => [c._id, c.count]));
+        categories.forEach(c => { c.count = counts[c.category_id] || 0; });
+        featured.forEach(p => { p.rating_avg = p.rating_count ? p.rating_sum / p.rating_count : null; });
+
+        const recentHistory = (user?.view_history || [])
+            .sort((a, b) => new Date(b.lastViewed) - new Date(a.lastViewed))
+            .slice(0, 4);
+
+        res.render('index', { recentHistory, featured, categories, recommended });
     } catch (err) {
-        console.error('Error loading recent history:', err);
-        res.status(500).send('Error loading recent history');
+        console.error('Error loading home page:', err);
+        res.status(500).render('templates/error', { errorMessage: 'Could not load the home page' });
     }
 });
 
@@ -73,10 +114,18 @@ app.use('/cart', cartRouter);
 app.use("/brands", brandRouter);
 app.use("/products", productRouter);
 app.use("/categories", categoryRouter);
+app.use("/recommendations", recommendationRouter);
+app.use("/api/recommendations", recommendationApi);
+
+app.use((req, res) => {
+    res.status(404).render('templates/error', { errorMessage: 'Page not found', status: 404 });
+});
 
 
 connectDB().then(() => {
-    app.listen(3000, () => console.log("🚀 Server running on http://localhost:3000"));
+    app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
+    // Similarity matrix: built at startup if missing/old, then every RECO_REBUILD_MINUTES (default 60)
+    if (process.env.RECO_SCHEDULE !== 'off') reco.scheduleBuilds();
 }).catch(err => process.exit(1));
 
 function convertData(timestamp) {
@@ -95,5 +144,6 @@ function capitalizeFirstLetter(string) {
     return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
+app.locals.assetVersion = Date.now().toString(36);   // changes on every restart: browsers fetch fresh CSS/JS
 app.locals.convertData = convertData;
 app.locals.capitalizeFirstLetter = capitalizeFirstLetter;

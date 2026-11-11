@@ -1,115 +1,127 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Registration</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <style>
-        body{
-            background-color: #dbdbdb;
-        }
-    </style>
+    <%- include('../templates/head', { title: 'Create account' }); %>
 </head>
 <body>
 <%- include('../templates/navbar'); %>
 
-<div class="container bg-white shadow rounded w-50 mt-4 text-center p-5 pb-4">
-    <h1>Sign Up</h1>
-    <div>
-        <div class="form-floating w-50  mx-auto">
-            <input type="text" class="form-control my-3" id="username" name="username">
-            <label for="username" class="fs-6">Name</label>
+<main class="container">
+    <div class="auth-wrap wide fade-in">
+        <div class="surface auth-card">
+            <div class="text-center mb-4">
+                <h1 class="serif mb-1">Create your account</h1>
+                <p class="text-muted mb-0">Save your favourites, track orders and get personal picks</p>
+            </div>
+
+            <form id="registerForm" novalidate>
+                <div class="small-caps mb-3">Account</div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="username" class="form-label">Name *</label>
+                        <input type="text" class="form-control" id="username" name="username" autocomplete="nickname" required maxlength="50">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="email" class="form-label">Email *</label>
+                        <input type="email" class="form-control" id="email" name="email" autocomplete="email" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="password" class="form-label">Password *</label>
+                        <input type="password" class="form-control" id="password" name="password" autocomplete="new-password" required>
+                        <div class="form-text">At least 6 characters, with upper and lower case letters and a number.</div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="role" class="form-label">Account type</label>
+                        <select id="role" name="role" class="form-select" onchange="toggleSecretCode()">
+                            <option value="user">Customer</option>
+                            <option value="admin">Administrator</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 d-none" id="secretCodeDiv">
+                        <label for="secretCode" class="form-label">Administrator code</label>
+                        <input type="password" class="form-control" id="secretCode" name="secretCode">
+                    </div>
+                </div>
+
+                <div class="divider-text">Profile · optional</div>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="full_name" class="form-label">Full name</label>
+                        <input type="text" class="form-control" id="full_name" name="full_name" maxlength="100" autocomplete="name">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="phone" class="form-label">Phone</label>
+                        <input type="tel" class="form-control" id="phone" name="phone" maxlength="20" autocomplete="tel" placeholder="+7 700 000 00 00">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="city" class="form-label">City</label>
+                        <input type="text" class="form-control" id="city" name="city" maxlength="60" autocomplete="address-level2">
+                    </div>
+                    <div class="col-md-6">
+                        <label for="birth_date" class="form-label">Birth date</label>
+                        <input type="date" class="form-control" id="birth_date" name="birth_date">
+                    </div>
+                    <div class="col-12">
+                        <label for="about" class="form-label">About me</label>
+                        <textarea class="form-control" id="about" name="about" maxlength="500" rows="3" placeholder="What do you watch? Films, sport, games…"></textarea>
+                    </div>
+                </div>
+
+                <div class="alert alert-danger d-none mt-4" id="error" role="alert"></div>
+
+                <button type="submit" id="submit" class="btn btn-brand btn-lg w-100 mt-4">Create account</button>
+                <p class="text-center text-muted small mt-3 mb-0">Already have an account? <a href="/auth/login">Log in</a></p>
+            </form>
         </div>
-
-        <div class="form-floating w-50  mx-auto">
-            <input type="email" class="form-control my-3" id="email" name="email">
-            <label for="email" class="fs-6">Email</label>
-        </div>
-
-        <div class="form-floating w-50  mx-auto">
-            <input type="password" class="form-control my-3" id="password" name="password">
-            <label for="password" class="fs-6">Password</label>
-        </div>
-
-        <select id="role" name="role" class="form-select w-50 mx-auto" required onchange="toggleSecretCode()">
-            <option value="user">Visitor</option>
-            <option value="admin">Admin</option>
-        </select><br>
-
-        <div id="secretCodeDiv" style="display: none;" class="form-floating mb-4 mt-0 w-50  mx-auto">
-            <input type="password" class="form-control my-3" id="secretCode" name="secretCode">
-            <label for="secretCode" class="fs-6">Secret Code</label>
-        </div>
-
-        <button type="submit" id="submit" class="btn btn-outline-success fs-4">Sign Up</button>
     </div>
-    <br>
-    <a href="/auth/login" class="link-offset-2 link-underline link-underline-opacity-0 fs-4">Have already account?</a>
-
-    <div class="alert alert-danger mt-3 pt-3 pb-3" style="display: none" id="error" role="alert">
-
-    </div>
-</div>
+</main>
 
 <%- include('../templates/footer'); %>
-</body>
 <script>
+    const form = document.getElementById('registerForm');
     const submit = document.getElementById('submit');
     const error = document.getElementById('error');
+    const val = id => document.getElementById(id).value;
 
-    submit.addEventListener('click', async function () {
-        const username = document.getElementById('username').value;
-        const email = document.getElementById('email').value;
-        const password = document.getElementById('password').value;
-        const secretCode = document.getElementById('secretCode').value;
-        const role = document.getElementById('role').value;
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        error.classList.add('d-none');
+        submit.disabled = true;
+        submit.textContent = 'Creating account…';
         try {
             const response = await fetch('/auth/register', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    username: username,
-                    email: email,
-                    password: password,
-                    role: role,
-                    secretCode: secretCode
+                    username: val('username'),
+                    email: val('email'),
+                    password: val('password'),
+                    role: val('role'),
+                    secretCode: val('secretCode'),
+                    full_name: val('full_name'),
+                    phone: val('phone'),
+                    city: val('city'),
+                    birth_date: val('birth_date'),
+                    about: val('about')
                 })
-            })
-
+            });
             const data = await response.json();
-            if (!response.ok) {
-                outputError(data.errorMessage || "An unknown error occurred");
-                return;
-            }
+            if (!response.ok) throw new Error(data.errorMessage || 'An unknown error occurred');
 
-            if (data.redirectUrl) {
-                window.location.href = data.redirectUrl;
-            } else {
-                alert("Registration successful! Please log in.");
-                window.location.href = '/auth/login';
-            }
-        } catch (error) {
-            console.error("❌ Registration Error:", error);
-            outputError("Registration Error: " + error);
+            TVStore.notifyAfterReload('Account created. Please log in.');
+            window.location.href = data.redirectUrl || '/auth/login';
+        } catch (err) {
+            error.textContent = err.message;
+            error.classList.remove('d-none');
+            error.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            submit.disabled = false;
+            submit.textContent = 'Create account';
         }
-    })
-
-    function outputError(e) {
-        error.style.display = 'block';
-        error.textContent = e;
-    }
+    });
 
     function toggleSecretCode() {
-        const roleSelect = document.getElementById('role');
-        const secretCodeDiv = document.getElementById('secretCodeDiv');
-
-        if (roleSelect.value === 'admin') {
-            secretCodeDiv.style.display = 'block';
-        } else {
-            secretCodeDiv.style.display = 'none';
-        }
+        document.getElementById('secretCodeDiv').classList.toggle('d-none', val('role') !== 'admin');
     }
 </script>
-
+</body>
 </html>

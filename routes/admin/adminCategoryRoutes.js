@@ -3,38 +3,45 @@ const Category = require('../../models/Category');
 const Product = require('../../models/Product');
 const router = express.Router();
 
-// ✅ GET all categories and render the categories_admin.ejs page
+// Only administrators may use this router
+router.use((req, res, next) => {
+    if (req.session.userStatus === "admin") return next();
+    if (req.method === "GET") {
+        req.flash("warning", "This page is for administrators only");
+        return res.redirect(req.session.userId ? "/" : "/auth/login");
+    }
+    return res.status(403).json({ error: "Unauthorized. Please, login to admin" });
+});
+
+// GET all categories and render the categories_admin.ejs page
 router.get("/", async (req, res) => {
     try {
-        const categories = await Category.find();
+        const categories = await Category.find().sort({ category_id: 1 }).lean();
         res.render("admin/categories_admin", { categories });
     } catch (err) {
         console.error("Error fetching categories:", err);
-        res.status(500).send("Error fetching categories");
+        res.status(500).render("templates/error", { errorMessage: "Error fetching categories" });
     }
 });
 
-// ✅ POST route to create a new category
+// Create a new category
 router.post("/", async (req, res) => {
     try {
         const { category_id, category_name, category_description } = req.body;
 
-        const existingCategory = await Category.findOne({ category_id: category_id });
+        const existingCategory = await Category.findOne({ $or: [{ category_id }, { category_name }] });
         if (existingCategory) {
-            return res.status(400).send("Category ID already exists");
+            req.flash("error", "A category with this ID or name already exists");
+            return res.redirect(303, "/categories/admin");
         }
 
-        const newCategory = new Category({
-            category_id,
-            category_name,
-            category_description
-        });
-
-        await newCategory.save();
-        res.status(200).json({success: true});
+        await Category.create({ category_id, category_name, category_description });
+        req.flash("success", `Category “${category_name}” created`);
+        res.redirect(303, "/categories/admin");
     } catch (err) {
         console.error("Error creating category:", err);
-        res.status(500).send("Error creating category");
+        req.flash("error", "Could not create the category: " + err.message);
+        res.redirect(303, "/categories/admin");
     }
 });
 

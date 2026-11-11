@@ -1,0 +1,27 @@
+<%
+  // Locals: section ('products' | 'brands' | 'categories' | 'users'), heading, subtitle
+  const tabs = [
+      ['products', '/products/admin', 'bi-box-seam', 'Products'],
+      ['brands', '/brands/admin', 'bi-award', 'Brands'],
+      ['categories', '/categories/admin', 'bi-grid', 'Categories'],
+      ['users', '/users/admin', 'bi-people', 'Users']
+  ];
+%>
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/auth/profile">My profile</a></li>
+        <li class="breadcrumb-item">Management</li>
+        <li class="breadcrumb-item active" aria-current="page"><%= heading %></li>
+    </ol>
+</nav>
+<div class="page-header">
+    <div>
+        <h1 class="serif"><%= heading %></h1>
+        <% if (typeof subtitle !== 'undefined' && subtitle) { %><p class="lead-text"><%= subtitle %></p><% } %>
+    </div>
+    <div class="admin-tabs">
+        <% tabs.forEach(([key, href, icon, label]) => { %>
+            <a href="<%= href %>" class="<%= section === key ? 'active' : '' %>"><i class="bi <%= icon %>"></i><%= label %></a>
+        <% }) %>
+    </div>
+</div>
