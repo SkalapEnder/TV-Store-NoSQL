@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <%- include('templates/head', { title: 'Televisions' }); %>
+    <%- include('templates/head', { title: 'Electronics and PC components' }); %>
 </head>
 <body>
 <%- include('templates/navbar', { active: 'home' }); %>
@@ -9,9 +9,9 @@
 <main class="container page">
     <!-- Hero -->
     <section class="hero mb-5 fade-in">
-        <span class="small-caps" style="color: rgba(255,255,255,.65)">TV Store · Collection <%= new Date().getFullYear() %></span>
-        <h1 class="serif mt-3 mb-3">Cinema-grade picture, right in your living room</h1>
-        <p class="mb-4">OLED, QLED and LED televisions from the world's leading brands. Compare by size, type and price, and choose the one that fits your room.</p>
+        <span class="small-caps" style="color: rgba(255,255,255,.65)"><%= storeName %> · Collection <%= new Date().getFullYear() %></span>
+        <h1 class="serif mt-3 mb-3">Everything for your desk, your pocket and your living room</h1>
+        <p class="mb-4">Smartphones, TVs, PC components, monitors and peripherals from the leading brands. Compare by specs and price, and build exactly what you need.</p>
         <div class="d-flex flex-wrap gap-2">
             <a href="/products" class="btn btn-light btn-lg">Browse catalog <i class="bi bi-arrow-right ms-1"></i></a>
             <% if (!isLoggedIn) { %>
@@ -29,17 +29,17 @@
     <% if (categories && categories.length) { %>
         <section class="mb-5">
             <div class="section-title">
-                <h2>Shop by type</h2>
+                <h2>Shop by category</h2>
                 <a href="/categories" class="small fw-medium">All categories <i class="bi bi-arrow-right"></i></a>
             </div>
             <div class="row g-3">
                 <% categories.forEach(c => { %>
-                    <div class="col-6 col-md-4 col-lg">
-                        <a class="category-chip" href="/products?category_id=<%= c.category_id %>">
-                            <span class="chip-icon"><i class="bi bi-tv"></i></span>
-                            <span>
-                                <span class="chip-name d-block"><%= c.category_name %></span>
-                                <span class="chip-sub"><%= c.count %> <%= c.count === 1 ? 'model' : 'models' %></span>
+                    <div class="col-6 col-md-4 col-lg-3 col-xl-2">
+                        <a class="category-chip h-100" href="/products?category=<%= c.slug %>">
+                            <span class="chip-icon flex-shrink-0"><i class="bi <%= c.icon %>"></i></span>
+                            <span class="min-w-0">
+                                <span class="chip-name d-block text-truncate"><%= c.name %></span>
+                                <span class="chip-sub"><%= c.count %> <%= c.count === 1 ? 'product' : 'products' %></span>
                             </span>
                         </a>
                     </div>

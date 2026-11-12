@@ -134,11 +134,12 @@ Example: `GET /api/recommendations?limit=1`
   "cached": false,
   "tookMs": 4,
   "items": [{
-    "product_id": 1023, "name": "Xiaomi 65\" LED Smart TV", "model": "XI65X23", "price": 396500,
-    "brand": "Xiaomi", "category": "LED", "diagonal": 65, "picture": "https://…", "rating_avg": 3.7,
-    "score": 8.6075,
-    "reason": { "type": "rated", "product_id": 1002, "name": "Sony 55\" LED Smart TV" },
-    "url": "/products/1023"
+    "product_id": 196810, "name": "Материнская плата ASUS TUF Gaming B850-Pro WiFi7 W Neo, AM5",
+    "model": "90MB1KD0-M0EAY0", "price": 169990, "brand": "ASUS", "category": "motherboard",
+    "specs": { "socket": "AM5", "chipset": "B850", "memory": "DDR5", "wifi": true },
+    "picture": "https://…", "rating_avg": 3.7, "score": 8.6075,
+    "reason": { "type": "rated", "product_id": 175290, "name": "Процессор AMD Ryzen 7 7800X3D, AM5, OEM" },
+    "url": "/products/196810"
   }]
 }
 ```
@@ -176,7 +177,7 @@ npm start                   # or: nodemon index
   `POST /api/recommendations/rebuild`.
 - Remove the demo shoppers: `npm run seed:demo -- --clean`.
 - Benchmark: `npm run bench`. It needs a MongoDB whose database name contains `bench`. The
-  default is local `mongodb://127.0.0.1:27017/tvstore_bench`; change it with `BENCH_MONGO_URI`.
+  default is local `mongodb://127.0.0.1:27017/techstore_bench`; change it with `BENCH_MONGO_URI`.
   Results go to `docs/perf/`.
 
 | Variable | Default | Meaning |
@@ -185,7 +186,7 @@ npm start                   # or: nodemon index
 | `PORT` | 3000 | HTTP port |
 | `RECO_REBUILD_MINUTES` | 60 | Matrix rebuild interval |
 | `RECO_SCHEDULE` | on | `off` disables automatic rebuilds |
-| `BENCH_MONGO_URI` | `mongodb://127.0.0.1:27017/tvstore_bench` | Benchmark database (dropped on every run) |
+| `BENCH_MONGO_URI` | `mongodb://127.0.0.1:27017/techstore_bench` | Benchmark database (dropped on every run) |
 
 ## 7. Data model additions
 

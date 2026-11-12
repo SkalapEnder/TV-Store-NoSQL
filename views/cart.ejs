@@ -26,7 +26,7 @@
         <div class="surface empty-state fade-in">
             <i class="bi bi-bag empty-icon"></i>
             <h3 class="h4">Your cart is empty</h3>
-            <p class="mb-4">Browse the catalog and add the TVs you like.</p>
+            <p class="mb-4">Browse the catalog and add the products you like.</p>
             <a href="/products" class="btn btn-brand btn-lg">Go to catalog</a>
         </div>
     <% } else { %>
@@ -39,10 +39,10 @@
                         <div class="cart-line">
                             <a href="/products/<%= item.product_id %>">
                                 <% if (item.picture) { %><img class="thumb" src="<%= item.picture %>" alt="" loading="lazy">
-                                <% } else { %><span class="thumb d-inline-flex align-items-center justify-content-center"><i class="bi bi-tv text-muted"></i></span><% } %>
+                                <% } else { %><span class="thumb d-inline-flex align-items-center justify-content-center"><i class="bi bi-box-seam text-muted"></i></span><% } %>
                             </a>
                             <div class="flex-grow-1 min-w-0 cl-info">
-                                <% if (s && s.brand) { %><div class="small-caps mb-1"><%= s.brand.name %></div><% } %>
+                                <% if (s && s.brand) { %><div class="small-caps mb-1"><%= s.brand %></div><% } %>
                                 <a class="cl-name d-block" href="/products/<%= item.product_id %>"><%= item.name %></a>
                                 <div class="small text-muted mt-1"><%= fmt(item.price) %> ₸ each</div>
                                 <% if (!s || max === 0) { %>

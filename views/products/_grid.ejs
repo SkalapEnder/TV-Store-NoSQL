@@ -1,3 +1,19 @@
+<%
+  // Locals: products, back, and optionally total, page, pages, query (for the pager links)
+  const q = (typeof query !== 'undefined' && query) || {};
+  const pageNo = typeof page !== 'undefined' ? page : 1;
+  const pageCount = typeof pages !== 'undefined' ? pages : 1;
+  const pageUrl = n => {
+      const params = new URLSearchParams();
+      Object.entries(q).forEach(([k, v]) => {
+          if (k === 'page') return;
+          (Array.isArray(v) ? v : [v]).forEach(x => { if (x !== '' && x != null) params.append(k, String(x)); });
+      });
+      if (n > 1) params.set('page', n);
+      return '/products' + (params.toString() ? '?' + params : '');
+  };
+%>
+<div data-total="<%= typeof total !== 'undefined' ? total : products.length %>" hidden></div>
 <% if (products.length > 0) { %>
     <div class="row g-3 g-xl-4">
         <% products.forEach(product => { %>
@@ -6,11 +22,23 @@
             </div>
         <% }) %>
     </div>
+    <% if (pageCount > 1) {
+        const from = Math.max(1, pageNo - 2), to = Math.min(pageCount, pageNo + 2); %>
+        <nav class="catalog-pager" aria-label="Pages">
+            <a class="btn btn-outline-brand btn-sm <%= pageNo <= 1 ? 'disabled' : '' %>" href="<%= pageUrl(pageNo - 1) %>" data-page="<%= pageNo - 1 %>" aria-label="Previous page"><i class="bi bi-chevron-left"></i></a>
+            <% if (from > 1) { %><a class="btn btn-ghost btn-sm" href="<%= pageUrl(1) %>" data-page="1">1</a><% if (from > 2) { %><span class="text-muted">…</span><% } %><% } %>
+            <% for (let n = from; n <= to; n++) { %>
+                <a class="btn btn-sm <%= n === pageNo ? 'btn-brand' : 'btn-ghost' %>" href="<%= pageUrl(n) %>" data-page="<%= n %>" <%= n === pageNo ? 'aria-current="page"' : '' %>><%= n %></a>
+            <% } %>
+            <% if (to < pageCount) { %><% if (to < pageCount - 1) { %><span class="text-muted">…</span><% } %><a class="btn btn-ghost btn-sm" href="<%= pageUrl(pageCount) %>" data-page="<%= pageCount %>"><%= pageCount %></a><% } %>
+            <a class="btn btn-outline-brand btn-sm <%= pageNo >= pageCount ? 'disabled' : '' %>" href="<%= pageUrl(pageNo + 1) %>" data-page="<%= pageNo + 1 %>" aria-label="Next page"><i class="bi bi-chevron-right"></i></a>
+        </nav>
+    <% } %>
 <% } else { %>
     <div class="surface empty-state">
         <i class="bi bi-search empty-icon"></i>
         <h3 class="h5">Nothing found</h3>
         <p class="mb-3">Try a different search or remove some filters.</p>
-        <a href="/products" class="btn btn-outline-brand">Reset filters</a>
+        <a href="<%= q.category ? '/products?category=' + encodeURIComponent(q.category) : '/products' %>" class="btn btn-outline-brand">Reset filters</a>
     </div>
 <% } %>

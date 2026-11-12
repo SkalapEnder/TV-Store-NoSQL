@@ -3,8 +3,8 @@
     <nav class="navbar navbar-expand-lg">
         <div class="container">
             <a class="brand-logo me-4" href="/">
-                <span class="brand-mark"><i class="bi bi-tv"></i></span>
-                <span class="serif">TV Store</span>
+                <span class="brand-mark"><i class="bi bi-cpu"></i></span>
+                <span class="serif"><%= storeName %></span>
             </a>
 
             <div class="d-flex align-items-center gap-1 order-lg-3 ms-auto ms-lg-0">
@@ -34,8 +34,6 @@
                                 <li><hr class="dropdown-divider"></li>
                                 <li><h6 class="dropdown-header">Management</h6></li>
                                 <li><a class="dropdown-item" href="/products/admin"><i class="bi bi-box-seam"></i> Products</a></li>
-                                <li><a class="dropdown-item" href="/brands/admin"><i class="bi bi-award"></i> Brands</a></li>
-                                <li><a class="dropdown-item" href="/categories/admin"><i class="bi bi-grid"></i> Categories</a></li>
                                 <li><a class="dropdown-item" href="/users/admin"><i class="bi bi-people"></i> Users</a></li>
                             <% } %>
                             <li><hr class="dropdown-divider"></li>
@@ -55,13 +53,24 @@
             <div class="collapse navbar-collapse order-lg-2" id="mainNav">
                 <ul class="navbar-nav me-lg-3 mt-3 mt-lg-0">
                     <li class="nav-item"><a class="nav-link <%= activePage === 'catalog' ? 'active' : '' %>" href="/products">Catalog</a></li>
-                    <li class="nav-item"><a class="nav-link <%= activePage === 'brands' ? 'active' : '' %>" href="/brands">Brands</a></li>
-                    <li class="nav-item"><a class="nav-link <%= activePage === 'categories' ? 'active' : '' %>" href="/categories">Categories</a></li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle <%= activePage === 'categories' ? 'active' : '' %>" href="/categories" role="button" data-bs-toggle="dropdown" aria-expanded="false">Categories</a>
+                        <ul class="dropdown-menu nav-categories">
+                            <li><a class="dropdown-item fw-medium" href="/categories"><i class="bi bi-grid"></i> All categories</a></li>
+                            <% navGroups.forEach(g => { %>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-header text-decoration-none" href="/products?group=<%= g.slug %>"><%= g.name %></a></li>
+                                <% g.categories.forEach(c => { %>
+                                    <li><a class="dropdown-item" href="/products?category=<%= c.slug %>"><i class="bi <%= c.icon %>"></i> <%= c.name %></a></li>
+                                <% }) %>
+                            <% }) %>
+                        </ul>
+                    </li>
                     <li class="nav-item"><a class="nav-link <%= activePage === 'foryou' ? 'active' : '' %>" href="/recommendations"><i class="bi bi-stars me-1"></i>For you</a></li>
                 </ul>
                 <form class="header-search position-relative my-3 my-lg-0 me-lg-auto" action="/products" method="GET" role="search">
                     <i class="bi bi-search"></i>
-                    <input class="form-control" type="search" name="q" placeholder="Search TVs, brands, models…" aria-label="Search" maxlength="100"
+                    <input class="form-control" type="search" name="q" placeholder="Search phones, GPUs, monitors, brands…" aria-label="Search" maxlength="100"
                            value="<%= typeof query !== 'undefined' && query && query.q ? query.q : '' %>">
                 </form>
             </div>

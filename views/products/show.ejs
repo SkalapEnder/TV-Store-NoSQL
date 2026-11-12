@@ -16,9 +16,9 @@
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="/">Home</a></li>
-            <li class="breadcrumb-item"><a href="/products">Televisions</a></li>
-            <% if (product.category?.id) { %>
-                <li class="breadcrumb-item"><a href="/products?category_id=<%= product.category.id %>"><%= product.category.name %></a></li>
+            <li class="breadcrumb-item"><a href="/categories">Catalog</a></li>
+            <% if (category) { %>
+                <li class="breadcrumb-item"><a href="/products?category=<%= category.slug %>"><%= category.name %></a></li>
             <% } %>
             <li class="breadcrumb-item active text-truncate" style="max-width: 280px" aria-current="page"><%= product.model %></li>
         </ol>
@@ -31,7 +31,7 @@
                 <% if (pictures.length) { %>
                     <img id="gallery-main-img" src="<%= pictures[0] %>" alt="<%= product.name %>">
                 <% } else { %>
-                    <i class="bi bi-tv text-muted" style="font-size: 5rem"></i>
+                    <i class="bi <%= category?.icon || 'bi-box-seam' %> text-muted" style="font-size: 5rem"></i>
                 <% } %>
             </div>
             <% if (pictures.length > 1) { %>
@@ -49,10 +49,10 @@
         <div class="col-lg-5">
             <div class="buy-box">
                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <% if (product.brand?.id) { %>
-                        <a href="/products?brand_id=<%= product.brand.id %>" class="small-caps"><%= product.brand.name %></a>
+                    <% if (product.brand) { %>
+                        <a href="/products?category=<%= product.category %>&brand=<%= encodeURIComponent(product.brand) %>" class="small-caps" title="More <%= category ? category.name.toLowerCase() : 'products' %> by <%= product.brand %>"><%= product.brand %></a>
                     <% } %>
-                    <% if (product.category?.name) { %><span class="badge-soft badge-neutral"><%= product.category.name %></span><% } %>
+                    <% if (category) { %><a href="/products?category=<%= category.slug %>" class="badge-soft badge-neutral text-decoration-none"><%= category.single %></a><% } %>
                 </div>
                 <h1 class="product-title"><%= product.name %></h1>
 
@@ -123,10 +123,14 @@
                 <div class="row">
                     <div class="col-lg-8">
                         <table class="spec-table">
-                            <tr><th>Brand</th><td><%= product.brand?.name || '—' %></td></tr>
+                            <tr><th>Brand</th><td><a href="/products?brand=<%= encodeURIComponent(product.brand) %>"><%= product.brand %></a></td></tr>
                             <tr><th>Model</th><td><%= product.model %></td></tr>
-                            <tr><th>Display type</th><td><%= product.category?.name || '—' %></td></tr>
-                            <tr><th>Screen size</th><td><%= product.diagonal ? product.diagonal + '″ (' + Math.round(product.diagonal * 2.54) + ' cm)' : '—' %></td></tr>
+                            <tr><th>Category</th><td><%= category ? category.name : product.category %></td></tr>
+                            <% (category ? category.specs : []).forEach(s => {
+                                let v = formatSpec(s, product.specs?.[s.key]);
+                                if (v && s.unit === '″') v += ' (' + Math.round(product.specs[s.key] * 2.54) + ' cm)'; %>
+                                <% if (v) { %><tr><th><%= s.label %></th><td><%= v %></td></tr><% } %>
+                            <% }) %>
                             <tr><th>Price</th><td><%= fmt(product.price) %> ₸</td></tr>
                             <tr><th>Availability</th><td><%= inStock ? product.quantity + ' pcs' : 'Out of stock' %></td></tr>
                             <tr><th>Product code</th><td><%= product.product_id %></td></tr>
@@ -149,7 +153,7 @@
                     <div class="col-md-8">
                         <div class="surface surface-pad h-100">
                             <% if (isLoggedIn) { %>
-                                <h3 class="h5 mb-1"><%= userRating ? 'Your rating' : 'Rate this TV' %></h3>
+                                <h3 class="h5 mb-1"><%= userRating ? 'Your rating' : 'Rate this product' %></h3>
                                 <p class="text-muted small mb-3"><%= userRating ? 'You can change your rating at any time.' : 'Your rating helps other customers and improves your recommendations.' %></p>
                                 <form action="/products/<%= product.product_id %>/rate" method="POST" class="d-flex flex-wrap align-items-center gap-3">
                                     <div class="star-input" role="radiogroup" aria-label="Rating">
@@ -162,7 +166,7 @@
                                 </form>
                             <% } else { %>
                                 <h3 class="h5 mb-1">Share your opinion</h3>
-                                <p class="text-muted mb-3">Log in to rate this TV.</p>
+                                <p class="text-muted mb-3">Log in to rate this product.</p>
                                 <a href="/auth/login" class="btn btn-outline-brand">Log in</a>
                             <% } %>
                         </div>
@@ -194,8 +198,8 @@
     <% if (related && related.length) { %>
         <section class="mt-5">
             <div class="section-title">
-                <h2>Similar <%= product.category?.name || '' %> TVs</h2>
-                <a href="/products?category_id=<%= product.category?.id %>" class="small fw-medium">See all <i class="bi bi-arrow-right"></i></a>
+                <h2>Similar <%= category ? category.name.toLowerCase() : 'products' %> at this price</h2>
+                <a href="/products?category=<%= product.category %>" class="small fw-medium">See all <i class="bi bi-arrow-right"></i></a>
             </div>
             <div class="row g-3 g-xl-4">
                 <% related.forEach(p => { %>

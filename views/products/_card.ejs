@@ -14,15 +14,14 @@
         <% if (pic) { %>
             <img src="<%= pic %>" alt="" loading="lazy">
         <% } else { %>
-            <span class="d-flex h-100 align-items-center justify-content-center text-muted"><i class="bi bi-tv fs-1"></i></span>
+            <span class="d-flex h-100 align-items-center justify-content-center text-muted"><i class="bi <%= getCategory(product.category)?.icon || 'bi-box-seam' %> fs-1"></i></span>
         <% } %>
     </a>
     <div class="pc-body">
-        <span class="pc-brand"><%= product.brand?.name || '' %></span>
+        <span class="pc-brand"><%= product.brand || '' %></span>
         <h3 class="pc-title"><a href="/products/<%= product.product_id %>"><%= product.name %></a></h3>
         <div class="pc-specs">
-            <% if (product.diagonal) { %><span class="spec-pill"><i class="bi bi-aspect-ratio"></i><%= product.diagonal %>″</span><% } %>
-            <% if (product.category?.name) { %><span class="spec-pill"><%= product.category.name %></span><% } %>
+            <% cardSpecs(product).forEach(text => { %><span class="spec-pill"><%= text %></span><% }) %>
         </div>
         <div class="rating-line mt-1">
             <% if (avg) { %>

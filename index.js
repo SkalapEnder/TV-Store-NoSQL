@@ -8,19 +8,17 @@ const connectDB = require("./scripts/db");
 const User = require('./models/User');
 const Cart = require('./models/Cart');
 const Product = require('./models/Product');
-const Category = require('./models/Category');
+const catalog = require('./scripts/catalog');
+const categoryConfig = require('./config/categories');
 
 //const adminRouter = require("./routes/admin/adminRoutes");
-const adminCategoryRouter = require("./routes/admin/adminCategoryRoutes");
 const adminProductRouter = require("./routes/admin/adminProductRoutes");
 const adminUserRouter = require("./routes/admin/adminUsersRoutes");
-const adminBrandRouter = require("./routes/admin/adminBrandRoutes");
 const mongoRoutes = require("./routes/admin/mongoRoutes");
 
 const authRouter = require('./routes/authRoutes');
 const productRouter = require('./routes/user/productRoutes');
 const cartRouter = require('./routes/user/cartRoutes');
-const brandRouter = require('./routes/user/brandRoutes');
 const categoryRouter = require('./routes/user/categoryRoutes');
 const recommendationRouter = require('./routes/user/recommendationRoutes');
 const recommendationApi = require('./routes/api/recommendationRoutes');
@@ -72,14 +70,13 @@ app.use(passport.session());
 
 app.get('/', async (req, res) => {
     try {
-        const [featured, categories, categoryCounts, user] = await Promise.all([
+        const [featured, groups, user] = await Promise.all([
             Product.find({ quantity: { $gt: 0 } })
-                .select('product_id name model price quantity diagonal brand category pictures rating_sum rating_count')
+                .select(catalog.CARD_FIELDS)
                 .sort({ rating_count: -1, price: -1 })
                 .limit(8)
                 .lean(),
-            Category.find({}, 'category_id category_name category_description').sort({ category_name: 1 }).lean(),
-            Product.aggregate([{ $group: { _id: '$category.id', count: { $sum: 1 } } }]),
+            catalog.categoryStats(),
             req.session.userId ? User.findById(req.session.userId).select('view_history').lean() : null
         ]);
         // Personal recommendations (item-based collaborative filtering); the page still works without them
@@ -87,9 +84,8 @@ app.get('/', async (req, res) => {
             ? await reco.recommendForUser(req.session.userId, { limit: 4 }).catch(err => { console.error('Recommendations error:', err.message); return null; })
             : null;
 
-        const counts = Object.fromEntries(categoryCounts.map(c => [c._id, c.count]));
-        categories.forEach(c => { c.count = counts[c.category_id] || 0; });
         featured.forEach(p => { p.rating_avg = p.rating_count ? p.rating_sum / p.rating_count : null; });
+        const categories = groups.flatMap(g => g.categories).filter(c => c.count > 0);
 
         const recentHistory = (user?.view_history || [])
             .sort((a, b) => new Date(b.lastViewed) - new Date(a.lastViewed))
@@ -103,15 +99,12 @@ app.get('/', async (req, res) => {
 });
 
 // Routes
-app.use('/categories/admin', adminCategoryRouter);
 app.use('/products/admin', adminProductRouter);
-app.use('/brands/admin', adminBrandRouter);
 app.use('/users/admin', adminUserRouter);
 app.use("/mongo", mongoRoutes);
 
 app.use('/auth', authRouter);
 app.use('/cart', cartRouter);
-app.use("/brands", brandRouter);
 app.use("/products", productRouter);
 app.use("/categories", categoryRouter);
 app.use("/recommendations", recommendationRouter);
@@ -147,3 +140,9 @@ function capitalizeFirstLetter(string) {
 app.locals.assetVersion = Date.now().toString(36);   // changes on every restart: browsers fetch fresh CSS/JS
 app.locals.convertData = convertData;
 app.locals.capitalizeFirstLetter = capitalizeFirstLetter;
+// Category helpers for the templates (names, icons, spec labels)
+app.locals.getCategory = categoryConfig.getCategory;
+app.locals.formatSpec = categoryConfig.formatSpec;
+app.locals.cardSpecs = categoryConfig.cardSpecs;
+app.locals.storeName = 'TechStore';
+app.locals.navGroups = categoryConfig.GROUPS.map(g => ({ ...g, categories: categoryConfig.categoriesOfGroup(g.slug) }));

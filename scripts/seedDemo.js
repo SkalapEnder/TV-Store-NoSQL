@@ -50,7 +50,7 @@ async function main() {
     }
 
     const count = parseInt(arg("users", "150"));
-    const products = await Product.find({}, "product_id name price pictures brand.id category.id").lean();
+    const products = await Product.find({}, "product_id name price pictures brand category specs.socket").lean();
     if (products.length < 10) throw new Error("The catalog has fewer than 10 products: import products first (Products → Import from feed)");
 
     const generate = makeUserGenerator(products, { seed: 2026, minItems: 5, maxItems: Math.min(35, products.length), withPictures: true });

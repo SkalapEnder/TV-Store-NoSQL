@@ -5,33 +5,52 @@
 </head>
 <body>
 <%- include('../templates/navbar', { active: 'categories' }); %>
+<% const fmt = n => Number(n || 0).toLocaleString('ru-RU'); %>
 
 <main class="container page">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/">Home</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Catalog</li>
+        </ol>
+    </nav>
     <div class="page-header">
         <div>
-            <h1 class="serif">Display types</h1>
-            <p class="lead-text">Choose the screen technology that suits you</p>
+            <h1 class="serif">Catalog</h1>
+            <p class="lead-text"><%= fmt(groups.reduce((s, g) => s + g.categories.reduce((a, c) => a + c.count, 0), 0)) %> products in <%= groups.reduce((s, g) => s + g.categories.length, 0) %> categories</p>
         </div>
+        <a href="/products" class="btn btn-outline-brand">All products <i class="bi bi-arrow-right ms-1"></i></a>
     </div>
 
-    <% if (!categories.length) { %>
-        <div class="surface empty-state"><i class="bi bi-grid empty-icon"></i><p class="mb-0">No categories yet.</p></div>
-    <% } else { %>
-        <div class="row g-3">
-            <% categories.forEach(category => { %>
-                <div class="col-md-6 col-xl-4 fade-in">
-                    <a href="/products?category_id=<%= category.category_id %>" class="category-chip align-items-start p-4">
-                        <span class="chip-icon"><i class="bi bi-tv"></i></span>
-                        <span class="flex-grow-1">
-                            <span class="chip-name d-block fs-5"><%= category.category_name %></span>
-                            <span class="chip-sub d-block mt-1"><%= category.category_description || 'Browse all ' + category.category_name + ' televisions' %></span>
-                        </span>
-                        <i class="bi bi-arrow-right text-muted"></i>
-                    </a>
-                </div>
-            <% }) %>
-        </div>
-    <% } %>
+    <% groups.forEach(g => { %>
+        <section class="mb-5">
+            <div class="section-title">
+                <h2><i class="bi <%= g.icon %> me-2 text-muted"></i><%= g.name %></h2>
+                <% if (g.categories.length > 1) { %>
+                    <a href="/products?group=<%= g.slug %>" class="small fw-medium">All <%= g.name.toLowerCase() %> <i class="bi bi-arrow-right"></i></a>
+                <% } %>
+            </div>
+            <div class="row g-3">
+                <% g.categories.forEach(c => { %>
+                    <div class="col-sm-6 col-lg-4 col-xl-3 fade-in">
+                        <a href="/products?category=<%= c.slug %>" class="category-card">
+                            <span class="cc-media">
+                                <% if (c.picture) { %><img src="<%= c.picture %>" alt="" loading="lazy"><% } else { %><i class="bi <%= c.icon %>"></i><% } %>
+                            </span>
+                            <span class="cc-body">
+                                <span class="chip-name d-flex align-items-center gap-2"><i class="bi <%= c.icon %> text-muted"></i><%= c.name %></span>
+                                <span class="chip-sub d-block mt-1"><%= c.description %></span>
+                                <span class="cc-meta">
+                                    <span><%= fmt(c.count) %> <%= c.count === 1 ? 'product' : 'products' %></span>
+                                    <% if (c.minPrice) { %><span>from <strong><%= fmt(c.minPrice) %> ₸</strong></span><% } %>
+                                </span>
+                            </span>
+                        </a>
+                    </div>
+                <% }) %>
+            </div>
+        </section>
+    <% }) %>
 </main>
 
 <%- include('../templates/footer'); %>

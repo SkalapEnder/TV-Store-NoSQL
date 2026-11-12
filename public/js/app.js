@@ -1,4 +1,4 @@
-/* TV Store: theme switch, toast notifications, confirm dialog, admin table helpers */
+/* TechStore: theme switch, toast notifications, confirm dialog, admin table helpers */
 (function () {
     "use strict";
 

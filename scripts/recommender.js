@@ -33,7 +33,7 @@ const CONFIG = {
     cacheMaxEntries: 5000
 };
 
-const CARD_FIELDS = "product_id name model price quantity diagonal brand category pictures rating_sum rating_count";
+const CARD_FIELDS = "product_id name model price quantity brand category group specs pictures rating_sum rating_count";
 
 // ---------- Interaction weights ----------
 // Implicit + explicit feedback mixed into one weight per (user, item), 0..10.
@@ -248,7 +248,7 @@ async function popular({ limit = 12, categoryIds = null, excludeIds = new Set() 
     if (categoryIds && categoryIds.length) {
         // Prefer the user's favourite categories, keep popularity order inside each group
         const fav = new Set(categoryIds);
-        list = [...list.filter(p => fav.has(p.category?.id)), ...list.filter(p => !fav.has(p.category?.id))];
+        list = [...list.filter(p => fav.has(p.category)), ...list.filter(p => !fav.has(p.category))];
     }
     return list.slice(0, limit);
 }
@@ -314,10 +314,10 @@ async function recommendItemBased(userId, { limit = 12 } = {}) {
 async function favouriteCategories(profile) {
     const top = profile.filter(e => e.w > 0).slice(0, 20);
     if (!top.length) return [];
-    const docs = await Product.find({ product_id: { $in: top.map(e => e.pid) } }, "product_id category.id").lean();
+    const docs = await Product.find({ product_id: { $in: top.map(e => e.pid) } }, "product_id category").lean();
     const score = new Map();
     const w = new Map(top.map(e => [e.pid, e.w]));
-    docs.forEach(d => { const c = d.category?.id; if (c != null) score.set(c, (score.get(c) || 0) + (w.get(d.product_id) || 0)); });
+    docs.forEach(d => { const c = d.category; if (c) score.set(c, (score.get(c) || 0) + (w.get(d.product_id) || 0)); });
     return [...score.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
 }
 

@@ -1,57 +1,24 @@
+// Categories page: product types grouped (Phones & TV, PC components, …) with counts and prices.
+// Categories are defined in config/categories.js; the numbers come from one aggregation.
 const express = require("express");
 const router = express.Router();
-const Category = require("../../models/Category");
+const { categoryStats } = require("../../scripts/catalog");
+const { getCategory, getGroup } = require("../../config/categories");
 
-// Get all categories
 router.get("/", async (req, res) => {
     try {
-        const categories = await Category.find();
-        res.render("categories/index", { categories });
+        res.render("categories/index", { groups: await categoryStats() });
     } catch (err) {
-        res.status(500).send("Error fetching categories");
+        console.error("Categories error:", err);
+        res.status(500).render("templates/error", { errorMessage: "Could not load categories" });
     }
 });
 
-// Get a specific category
-router.get("/:id", async (req, res) => {
-    try {
-        const category = await Category.findById(req.params.id);
-        if (!category) return res.status(404).send("Category not found");
-        res.render("categories/show", { category });
-    } catch (err) {
-        res.status(500).send("Error fetching category");
-    }
-});
-
-// Create a category
-router.post("/", async (req, res) => {
-    try {
-        const newCategory = new Category(req.body);
-        await newCategory.save();
-        res.redirect("/categories");
-    } catch (err) {
-        res.status(500).send("Error creating category");
-    }
-});
-
-// Update a category
-router.put("/:id", async (req, res) => {
-    try {
-        await Category.findByIdAndUpdate(req.params.id, req.body);
-        res.redirect("/categories");
-    } catch (err) {
-        res.status(500).send("Error updating category");
-    }
-});
-
-// Delete a category
-router.delete("/:id", async (req, res) => {
-    try {
-        await Category.findByIdAndDelete(req.params.id);
-        res.redirect("/categories");
-    } catch (err) {
-        res.status(500).send("Error deleting category");
-    }
+// /categories/gpu -> catalog of that category; /categories/pc-parts -> catalog of the group
+router.get("/:slug", (req, res) => {
+    if (getCategory(req.params.slug)) return res.redirect(301, `/products?category=${req.params.slug}`);
+    if (getGroup(req.params.slug)) return res.redirect(301, `/products?group=${req.params.slug}`);
+    res.status(404).render("templates/error", { errorMessage: "Category not found", status: 404 });
 });
 
 module.exports = router;

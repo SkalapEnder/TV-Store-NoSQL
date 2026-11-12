@@ -6,65 +6,96 @@
 <body>
 <%- include('../templates/navbar'); %>
 <%
+  const total = Object.values(counts).reduce((s, c) => s + c.n, 0);
   const outOfStock = products.filter(p => !(p.quantity > 0)).length;
-  const fmt = n => Number(n || 0).toLocaleString('ru-RU');
+  const specSummary = p => category.specs
+      .map(s => s.type === 'bool' ? (p.specs?.[s.key] ? s.label : null) : formatSpec(s, p.specs?.[s.key]))
+      .filter(Boolean).join(' · ');
 %>
 
 <main class="container-xxl page">
-    <%- include('../templates/admin_header', { section: 'products', heading: 'Products', subtitle: products.length + ' products · ' + outOfStock + ' out of stock' }); %>
+    <%- include('../templates/admin_header', { section: 'products', heading: 'Products', subtitle: total + ' products in ' + categories.length + ' categories' }); %>
+
+    <!-- Category tabs -->
+    <div class="category-strip mb-4">
+        <% categories.forEach(c => { const n = counts[c.slug]?.n || 0; %>
+            <a class="category-pill <%= c.slug === category.slug ? 'border-brand' : '' %>" href="/products/admin?category=<%= c.slug %>" <%= c.slug === category.slug ? 'aria-current="page"' : '' %>>
+                <i class="bi <%= c.icon %>"></i><span><%= c.name %></span><small><%= n %></small>
+            </a>
+        <% }) %>
+    </div>
 
     <!-- Add product -->
     <details class="surface surface-pad collapse-card mb-4">
         <summary>
             <span class="d-flex align-items-center gap-2"><i class="bi bi-plus-circle"></i><span class="fw-semibold">Add a product</span></span>
-            <span class="d-flex align-items-center gap-2">
-                <i class="bi bi-chevron-down chev"></i>
-            </span>
+            <span class="d-flex align-items-center gap-2"><i class="bi bi-chevron-down chev"></i></span>
         </summary>
-        <form action="/products/admin" method="POST">
+        <form action="/products/admin" method="POST" id="addProductForm">
             <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label" for="category">Category *</label>
+                    <select class="form-select" id="category" name="category" required>
+                        <% groups.forEach(g => { %>
+                            <optgroup label="<%= g.name %>">
+                                <% categories.filter(c => c.group === g.slug).forEach(c => { %>
+                                    <option value="<%= c.slug %>" <%= c.slug === category.slug ? 'selected' : '' %>><%= c.name %></option>
+                                <% }) %>
+                            </optgroup>
+                        <% }) %>
+                    </select>
+                </div>
                 <div class="col-md-2">
                     <label class="form-label" for="product_id">Product ID *</label>
-                    <input type="number" class="form-control" id="product_id" name="product_id" min="1" required
-                           value="<%= products.reduce((m, p) => Math.max(m, p.product_id || 0), 0) + 1 %>">
+                    <input type="number" class="form-control" id="product_id" name="product_id" min="1" required value="<%= nextId %>">
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label" for="name">Name *</label>
-                    <input type="text" class="form-control" id="name" name="name" required>
+                <div class="col-md-3">
+                    <label class="form-label" for="brand">Brand *</label>
+                    <input type="text" class="form-control" id="brand" name="brand" list="brandOptions" required maxlength="60" autocomplete="off">
+                    <datalist id="brandOptions"><% brands.forEach(b => { %><option value="<%= b %>"><% }) %></datalist>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label" for="model">Model *</label>
                     <input type="text" class="form-control" id="model" name="model" required>
                 </div>
-                <div class="col-12">
-                    <label class="form-label" for="description">Description</label>
-                    <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                <div class="col-md-8">
+                    <label class="form-label" for="name">Name *</label>
+                    <input type="text" class="form-control" id="name" name="name" required>
                 </div>
-                <div class="col-6 col-md-3">
+                <div class="col-6 col-md-2">
                     <label class="form-label" for="price">Price, ₸ *</label>
                     <input type="number" class="form-control" id="price" name="price" min="0" required>
                 </div>
-                <div class="col-6 col-md-3">
+                <div class="col-6 col-md-2">
                     <label class="form-label" for="available">Stock, pcs *</label>
                     <input type="number" class="form-control" id="available" name="available" min="0" required>
                 </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label" for="diagonal">Diagonal, ″</label>
-                    <input type="number" class="form-control" id="diagonal" name="diagonal" min="10" max="120">
-                </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label" for="brand">Brand *</label>
-                    <select class="form-select" id="brand" name="brand" required>
-                        <option value="" disabled selected>Select…</option>
-                        <% brands.forEach(b => { %><option value="<%= b.brand_id %>"><%= b.brand_name %></option><% }) %>
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label" for="category">Category *</label>
-                    <select class="form-select" id="category" name="category" required>
-                        <option value="" disabled selected>Select…</option>
-                        <% categories.forEach(c => { %><option value="<%= c.category_id %>"><%= c.category_name %></option><% }) %>
-                    </select>
+
+                <!-- Specs of the chosen category (only the visible set is enabled and submitted) -->
+                <% categories.forEach(c => { %>
+                    <fieldset class="col-12" data-specs-for="<%= c.slug %>" <%= c.slug === category.slug ? '' : 'hidden disabled' %>>
+                        <legend class="form-label fw-semibold mb-2" style="font-size: .9rem"><%= c.single %> specifications</legend>
+                        <div class="row g-3">
+                            <% c.specs.forEach(s => { const id = 'spec_' + c.slug + '_' + s.key; %>
+                                <div class="col-6 col-md-3">
+                                    <% if (s.type === 'bool') { %>
+                                        <div class="form-check form-switch mt-md-4">
+                                            <input class="form-check-input" type="checkbox" role="switch" id="<%= id %>" name="specs[<%= s.key %>]" value="true">
+                                            <label class="form-check-label" for="<%= id %>"><%= s.label %></label>
+                                        </div>
+                                    <% } else { %>
+                                        <label class="form-label" for="<%= id %>"><%= s.label %><%= s.unit ? ', ' + s.unit : '' %></label>
+                                        <input type="<%= s.type === 'number' ? 'number' : 'text' %>" <%= s.type === 'number' ? 'step=any min=0' : 'maxlength=60' %> class="form-control" id="<%= id %>" name="specs[<%= s.key %>]">
+                                    <% } %>
+                                </div>
+                            <% }) %>
+                        </div>
+                    </fieldset>
+                <% }) %>
+
+                <div class="col-12">
+                    <label class="form-label" for="description">Description</label>
+                    <textarea class="form-control" id="description" name="description" rows="3"></textarea>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label" for="image1">Main image URL *</label>
@@ -91,29 +122,30 @@
 
     <!-- List -->
     <div class="table-tools">
-        <div class="search">
+        <form class="search" action="/products/admin" method="GET">
             <i class="bi bi-search"></i>
-            <input type="search" class="form-control" placeholder="Search by name, model, brand…" data-table-search="productsTable">
-        </div>
+            <input type="hidden" name="category" value="<%= category.slug %>">
+            <input type="search" class="form-control" name="q" value="<%= q %>" placeholder="Search <%= category.name.toLowerCase() %> by name, model, brand, ID…" data-table-search="productsTable">
+        </form>
+        <span class="text-muted small"><%= products.length %> <%= category.name.toLowerCase() %> · <%= outOfStock %> out of stock</span>
         <form action="/products/admin/scrape" method="POST"
-              data-confirm="Download the latest TV feed and update prices, stock and the product list. This may take a minute."
+              data-confirm="Download the latest shop.kz feed and update prices, stock and the product list of all categories. This may take a minute."
               data-confirm-title="Import products from the feed?" data-confirm-button="Start import" data-confirm-danger="false">
             <button type="submit" class="btn btn-outline-brand" data-loading-text="Importing…"><i class="bi bi-cloud-download me-1"></i>Import from feed</button>
         </form>
     </div>
 
     <div class="table-wrap">
-        <table class="table table-hover admin-table" id="productsTable" data-table data-page-size="20">
+        <table class="table table-hover admin-table" id="productsTable" data-table data-page-size="25">
             <thead>
             <tr>
                 <th>ID</th>
-                <th style="min-width: 260px">Product</th>
+                <th style="min-width: 280px">Product</th>
                 <th style="min-width: 140px">Model</th>
-                <th style="min-width: 220px">Description</th>
-                <th>Diag.</th>
+                <th style="min-width: 130px">Brand</th>
+                <th style="min-width: 180px">Specifications</th>
                 <th>Price, ₸</th>
                 <th>Stock</th>
-                <th>Brand / Type</th>
                 <th class="text-end">Actions</th>
             </tr>
             </thead>
@@ -128,16 +160,12 @@
                         </div>
                     </td>
                     <td><input type="text" class="form-control product-model" value="<%= product.model %>"></td>
-                    <td><textarea class="form-control product-description" rows="2"><%= product.description %></textarea></td>
-                    <td><input type="number" class="form-control product-diagonal" style="min-width: 70px" value="<%= product.diagonal %>"></td>
+                    <td><input type="text" class="form-control product-brand" value="<%= product.brand %>" list="brandOptions"></td>
+                    <td class="small text-muted"><%= specSummary(product) || '—' %></td>
                     <td><input type="number" class="form-control product-price" style="min-width: 110px" value="<%= product.price %>"></td>
                     <td>
                         <input type="number" class="form-control product-quantity" style="min-width: 70px" value="<%= product.quantity %>">
                         <% if (!(product.quantity > 0)) { %><span class="badge-soft badge-out d-inline-block mt-1">Out</span><% } %>
-                    </td>
-                    <td class="small">
-                        <div class="fw-medium"><%= product.brand?.name %></div>
-                        <div class="text-muted"><%= product.category?.name %></div>
                     </td>
                     <td class="actions">
                         <a href="/products/<%= product.product_id %>" target="_blank" class="btn btn-ghost btn-icon btn-sm" title="Open in store"><i class="bi bi-box-arrow-up-right"></i></a>
@@ -154,6 +182,22 @@
 
 <%- include('../templates/footer'); %>
 <script>
+    // Add form: show the spec fields of the chosen category and suggest its brands
+    const categorySelect = document.getElementById('category');
+    const brandOptions = document.getElementById('brandOptions');
+    categorySelect.addEventListener('change', async () => {
+        const slug = categorySelect.value;
+        document.querySelectorAll('[data-specs-for]').forEach(fs => {
+            const on = fs.dataset.specsFor === slug;
+            fs.hidden = !on; fs.disabled = !on;
+        });
+        try {
+            const brands = await (await fetch('/products/brands?category=' + encodeURIComponent(slug))).json();
+            brandOptions.innerHTML = '';
+            brands.forEach(b => { const o = document.createElement('option'); o.value = b.name; brandOptions.appendChild(o); });
+        } catch { /* suggestions are optional */ }
+    });
+
     async function updateProduct(productId, btn) {
         const row = document.querySelector(`[data-product-id="${productId}"]`);
         const get = sel => row.querySelector(sel).value;
@@ -163,11 +207,12 @@
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    name: get('.product-name'), model: get('.product-model'), description: get('.product-description'),
-                    diagonal: get('.product-diagonal'), price: get('.product-price'), quantity: get('.product-quantity')
+                    name: get('.product-name'), model: get('.product-model'), brand: get('.product-brand'),
+                    price: get('.product-price'), quantity: get('.product-quantity')
                 }),
             });
-            if (!response.ok) throw new Error(response.statusText);
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || response.statusText);
             row.classList.remove('dirty');
             TVStore.notify('Product saved');
         } catch (error) {

@@ -1,88 +1,145 @@
+<%
+  const q = (typeof query !== 'undefined' && query) || {};
+  const list = v => (v === undefined || v === null || v === '' ? [] : (Array.isArray(v) ? v : [v])).map(String);
+  const selectedBrands = new Set(list(q.brand));
+  const fmt = n => Number(n || 0).toLocaleString('ru-RU');
+  const title = category ? category.name : group ? group.name : (q.q ? 'Search' : 'All products');
+  const resetUrl = category ? '/products?category=' + category.slug : group ? '/products?group=' + group.slug : '/products';
+  const subCategories = category ? [] : (group ? categories.filter(c => c.group === group.slug) : categories);
+%>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <%- include('../templates/head', { title: 'Catalog' }); %>
+    <%- include('../templates/head', { title }); %>
 </head>
 <body>
-<% const q = (typeof query !== 'undefined' && query) || {}; %>
 <%- include('../templates/navbar', { active: 'catalog', query: q }); %>
 
 <main class="container page">
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="/">Home</a></li>
-            <li class="breadcrumb-item active" aria-current="page">Televisions</li>
+            <li class="breadcrumb-item"><a href="/categories">Catalog</a></li>
+            <% if (category) { %>
+                <li class="breadcrumb-item"><a href="/products?group=<%= category.group %>"><%= groups.find(g => g.slug === category.group).name %></a></li>
+            <% } %>
+            <li class="breadcrumb-item active" aria-current="page"><%= title %></li>
         </ol>
     </nav>
     <div class="page-header">
         <div>
-            <h1 class="serif">Televisions</h1>
-            <p class="lead-text"><% if (q.q) { %>Results for “<%= q.q %>”<% } else { %>OLED, QLED and LED models from leading brands<% } %></p>
+            <h1 class="serif"><% if (category) { %><i class="bi <%= category.icon %> me-2 text-muted fs-3"></i><% } %><%= title %></h1>
+            <p class="lead-text">
+                <% if (q.q) { %>Results for “<%= q.q %>”<% if (category) { %> in <%= category.name.toLowerCase() %><% } %>
+                <% } else if (category) { %><%= category.description %>
+                <% } else if (group) { %><%= subCategories.map(c => c.name).join(', ') %> from <%= facets.brands.length %> brands
+                <% } else { %>Phones, TVs, PC components and peripherals from <%= facets.brands.length %> brands<% } %>
+            </p>
         </div>
         <button class="btn btn-outline-brand d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#filtersCollapse" aria-expanded="false">
             <i class="bi bi-sliders me-1"></i> Filters
         </button>
     </div>
 
+    <% if (subCategories.length) { %>
+        <!-- Categories of the group (or all categories) -->
+        <div class="category-strip mb-4">
+            <% subCategories.forEach(c => { const n = facets.categories ? facets.categories[c.slug] : null; %>
+                <a class="category-pill" href="/products?category=<%= c.slug %><%= q.q ? '&q=' + encodeURIComponent(q.q) : '' %>">
+                    <i class="bi <%= c.icon %>"></i><span><%= c.name %></span><% if (n) { %><small><%= n %></small><% } %>
+                </a>
+            <% }) %>
+        </div>
+    <% } %>
+
     <div class="row g-4">
         <!-- Filters -->
         <aside class="col-lg-3">
             <div class="collapse d-lg-block" id="filtersCollapse">
                 <form id="filterForm" class="surface surface-pad filters-panel" action="/products" method="GET">
+                    <% if (category) { %><input type="hidden" name="category" value="<%= category.slug %>"><% } %>
+                    <% if (group) { %><input type="hidden" name="group" value="<%= group.slug %>"><% } %>
+
                     <div class="filter-group">
                         <div class="filter-title">Search</div>
-                        <div class="position-relative">
-                            <input type="search" id="product_search" name="q" class="form-control" placeholder="Name, model…" maxlength="100" value="<%= q.q || '' %>">
-                        </div>
+                        <input type="search" id="product_search" name="q" class="form-control" placeholder="Name, model, brand…" maxlength="100" value="<%= q.q || '' %>">
                     </div>
 
                     <div class="filter-group">
-                        <div class="filter-title">Type</div>
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="radio" name="category_id" id="cat_all" value="" <%= !q.category_id ? 'checked' : '' %>>
-                            <label class="form-check-label" for="cat_all">All types</label>
-                        </div>
-                        <% categories.forEach(c => { %>
-                            <div class="form-check mb-2">
-                                <input class="form-check-input" type="radio" name="category_id" id="cat_<%= c.category_id %>" value="<%= c.category_id %>"
-                                       <%= String(q.category_id) === String(c.category_id) ? 'checked' : '' %>>
-                                <label class="form-check-label" for="cat_<%= c.category_id %>"><%= c.category_name %></label>
-                            </div>
-                        <% }) %>
-                    </div>
-
-                    <div class="filter-group">
-                        <label class="filter-title d-block" for="brand_filter">Brand</label>
-                        <select class="form-select" id="brand_filter" name="brand_id">
-                            <option value="">All brands</option>
-                            <% brands.forEach(b => { %>
-                                <option value="<%= b.brand_id %>" <%= String(q.brand_id) === String(b.brand_id) ? 'selected' : '' %>><%= b.brand_name %></option>
+                        <label class="filter-title d-block" for="category_select">Category</label>
+                        <select class="form-select" id="category_select" data-navigate>
+                            <option value="/products">All products</option>
+                            <% groups.forEach(g => { %>
+                                <optgroup label="<%= g.name %>">
+                                    <option value="/products?group=<%= g.slug %>" <%= group && group.slug === g.slug ? 'selected' : '' %>>All <%= g.name.toLowerCase() %></option>
+                                    <% categories.filter(c => c.group === g.slug).forEach(c => { %>
+                                        <option value="/products?category=<%= c.slug %>" <%= category && category.slug === c.slug ? 'selected' : '' %>><%= c.name %></option>
+                                    <% }) %>
+                                </optgroup>
                             <% }) %>
                         </select>
                     </div>
 
                     <div class="filter-group">
-                        <div class="filter-title">Price, ₸</div>
-                        <div class="d-flex gap-2 align-items-center">
-                            <input type="number" name="min" min="0" step="1000" class="form-control" placeholder="from" value="<%= q.min || '' %>" aria-label="Minimum price">
-                            <span class="text-muted">–</span>
-                            <input type="number" name="max" min="0" step="1000" class="form-control" placeholder="to" value="<%= q.max || '' %>" aria-label="Maximum price">
+                        <div class="filter-title d-flex justify-content-between align-items-center">
+                            <span>Brand</span>
+                            <% if (selectedBrands.size) { %><button type="button" class="btn btn-link btn-sm p-0 text-decoration-none" data-clear="brand">Clear</button><% } %>
+                        </div>
+                        <% if (facets.brands.length > 8) { %>
+                            <input type="search" class="form-control form-control-sm mb-2" placeholder="Find a brand…" data-brand-search aria-label="Find a brand">
+                        <% } %>
+                        <div class="facet-list" data-brand-list>
+                            <% facets.brands.forEach((b, i) => { %>
+                                <div class="form-check" data-brand-name="<%= b.name.toLowerCase() %>">
+                                    <input class="form-check-input" type="checkbox" name="brand" id="brand_<%= i %>" value="<%= b.name %>" <%= selectedBrands.has(b.name) ? 'checked' : '' %>>
+                                    <label class="form-check-label d-flex justify-content-between gap-2 w-100" for="brand_<%= i %>"><span><%= b.name %></span><small class="text-muted"><%= b.n %></small></label>
+                                </div>
+                            <% }) %>
                         </div>
                     </div>
 
                     <div class="filter-group">
-                        <div class="filter-title">Screen size, inches</div>
+                        <div class="filter-title">Price, ₸</div>
                         <div class="d-flex gap-2 align-items-center">
-                            <input type="number" name="min_diag" min="0" max="120" class="form-control" placeholder="from" value="<%= q.min_diag || '' %>" aria-label="Minimum diagonal">
+                            <input type="number" name="min" min="0" step="1000" class="form-control" placeholder="<%= fmt(facets.price.min) %>" value="<%= q.min || '' %>" aria-label="Minimum price">
                             <span class="text-muted">–</span>
-                            <input type="number" name="max_diag" min="0" max="120" class="form-control" placeholder="to" value="<%= q.max_diag || '' %>" aria-label="Maximum diagonal">
-                        </div>
-                        <div class="d-flex flex-wrap gap-1 mt-2">
-                            <% [[0, 43, 'up to 43″'], [50, 55, '50–55″'], [65, 65, '65″'], [75, 120, '75″+']].forEach(([from, to, label]) => { %>
-                                <button type="button" class="btn btn-outline-brand btn-sm" data-diag="<%= from %>,<%= to %>"><%= label %></button>
-                            <% }) %>
+                            <input type="number" name="max" min="0" step="1000" class="form-control" placeholder="<%= fmt(facets.price.max) %>" value="<%= q.max || '' %>" aria-label="Maximum price">
                         </div>
                     </div>
+
+                    <% if (category) { category.specs.filter(s => s.filter).forEach(s => {
+                        const f = facets.specs[s.key];
+                        const param = 'spec_' + s.key; %>
+                        <% if (s.filter === 'select' && f && f.length > 1) { const sel = new Set(list(q[param])); %>
+                            <div class="filter-group">
+                                <div class="filter-title"><%= s.label %></div>
+                                <div class="facet-list">
+                                    <% f.forEach((v, i) => { %>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="<%= param %>" id="<%= param %>_<%= i %>" value="<%= v.value %>" <%= sel.has(String(v.value)) ? 'checked' : '' %>>
+                                            <label class="form-check-label d-flex justify-content-between gap-2 w-100" for="<%= param %>_<%= i %>"><span><%= formatSpec(s, v.value) %></span><small class="text-muted"><%= v.n %></small></label>
+                                        </div>
+                                    <% }) %>
+                                </div>
+                            </div>
+                        <% } else if (s.filter === 'range' && f && f.max > f.min) { %>
+                            <div class="filter-group">
+                                <div class="filter-title"><%= s.label %><%= s.unit ? ', ' + s.unit : '' %></div>
+                                <div class="d-flex gap-2 align-items-center">
+                                    <input type="number" name="<%= param %>_min" min="0" step="any" class="form-control" placeholder="<%= f.min %>" value="<%= q[param + '_min'] || '' %>" aria-label="<%= s.label %> from">
+                                    <span class="text-muted">–</span>
+                                    <input type="number" name="<%= param %>_max" min="0" step="any" class="form-control" placeholder="<%= f.max %>" value="<%= q[param + '_max'] || '' %>" aria-label="<%= s.label %> to">
+                                </div>
+                            </div>
+                        <% } else if (s.filter === 'bool' && f > 0) { %>
+                            <div class="filter-group">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="<%= param %>" name="<%= param %>" value="true" <%= q[param] === 'true' ? 'checked' : '' %>>
+                                    <label class="form-check-label d-flex justify-content-between gap-2" for="<%= param %>"><span><%= s.label %></span><small class="text-muted"><%= f %></small></label>
+                                </div>
+                            </div>
+                        <% } %>
+                    <% }) } %>
 
                     <div class="filter-group">
                         <div class="form-check form-switch">
@@ -93,7 +150,7 @@
 
                     <div class="d-grid gap-2 pt-3">
                         <button type="submit" class="btn btn-brand" data-no-lock>Show results</button>
-                        <a href="/products" class="btn btn-ghost btn-sm">Reset all filters</a>
+                        <a href="<%= resetUrl %>" class="btn btn-ghost btn-sm">Reset all filters</a>
                     </div>
                 </form>
             </div>
@@ -102,14 +159,13 @@
         <!-- Results -->
         <section class="col-lg-9">
             <div class="catalog-toolbar">
-                <span class="result-count" id="result_count"><%= products.length %> <%= products.length === 1 ? 'product' : 'products' %></span>
+                <span class="result-count" id="result_count"><%= fmt(total) %> <%= total === 1 ? 'product' : 'products' %></span>
                 <div class="d-flex align-items-center gap-2">
                     <label for="sort" class="text-muted small text-nowrap">Sort by</label>
                     <select class="form-select form-select-sm" id="sort" name="sort" form="filterForm" style="min-width: 190px">
-                        <option value="">Relevance</option>
+                        <option value=""><%= q.q ? 'Relevance' : 'Price: low to high' %></option>
                         <option value="price_asc" <%= q.sort === 'price_asc' ? 'selected' : '' %>>Price: low to high</option>
                         <option value="price_desc" <%= q.sort === 'price_desc' ? 'selected' : '' %>>Price: high to low</option>
-                        <option value="diagonal" <%= q.sort === 'diagonal' ? 'selected' : '' %>>Largest screen</option>
                         <option value="rating" <%= q.sort === 'rating' ? 'selected' : '' %>>Most reviewed</option>
                         <option value="name" <%= q.sort === 'name' ? 'selected' : '' %>>Name</option>
                     </select>
@@ -117,7 +173,7 @@
             </div>
 
             <div id="product_list">
-                <%- include('_grid', { products, back: typeof back !== 'undefined' ? back : '/products' }); %>
+                <%- include('_grid', { products, total, page, pages, query: q, back: typeof back !== 'undefined' ? back : '/products' }); %>
             </div>
         </section>
     </div>
@@ -129,16 +185,27 @@
     const list = document.getElementById('product_list');
     const count = document.getElementById('result_count');
     let controller = null;
+    let currentPage = 1;
 
+    // Form values as an object; repeated names (brand, spec_*) become arrays
     function currentParams() {
         const params = {};
         new FormData(filterForm).forEach((value, key) => {
-            if (String(value).trim() !== '') params[key] = value;
+            if (String(value).trim() === '') return;
+            if (key in params) params[key] = [].concat(params[key], value);
+            else params[key] = value;
         });
+        if (currentPage > 1) params.page = currentPage;
         return params;
     }
+    function toQuery(params) {
+        const sp = new URLSearchParams();
+        Object.entries(params).forEach(([k, v]) => [].concat(v).forEach(x => sp.append(k, x)));
+        return sp.toString();
+    }
 
-    async function applyFilters() {
+    async function applyFilters({ keepPage = false } = {}) {
+        if (!keepPage) currentPage = 1;
         const params = currentParams();
         if (controller) controller.abort();
         controller = new AbortController();
@@ -153,9 +220,11 @@
             });
             if (!response.ok) throw new Error('Search failed');
             list.innerHTML = await response.text();
-            const n = list.querySelectorAll('.product-card').length;
-            count.textContent = `${n} ${n === 1 ? 'product' : 'products'}`;
-            history.replaceState(null, '', '/products' + (Object.keys(params).length ? '?' + new URLSearchParams(params) : ''));
+            const n = Number(list.querySelector('[data-total]')?.dataset.total || 0);
+            count.textContent = `${n.toLocaleString('ru-RU')} ${n === 1 ? 'product' : 'products'}`;
+            const qs = toQuery(params);
+            history.replaceState(null, '', '/products' + (qs ? '?' + qs : ''));
+            if (keepPage) list.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } catch (err) {
             if (err.name !== 'AbortError') TVStore.notify('Could not load products. Please try again.', 'error');
         } finally {
@@ -165,21 +234,43 @@
 
     filterForm.addEventListener('submit', e => { e.preventDefault(); applyFilters(); });
     // Apply right away when a choice changes; typing waits for a short pause
-    filterForm.addEventListener('change', e => { if (e.target.type !== 'search' && e.target.type !== 'number') applyFilters(); });
-    document.getElementById('sort').addEventListener('change', applyFilters);
+    filterForm.addEventListener('change', e => {
+        if (e.target.matches('[data-navigate], [data-brand-search]')) return;
+        if (e.target.type !== 'search' && e.target.type !== 'number') applyFilters();
+    });
+    document.getElementById('sort').addEventListener('change', () => applyFilters());
     let typingTimer;
     filterForm.addEventListener('input', e => {
-        if (e.target.type !== 'search' && e.target.type !== 'number') return;
+        if (e.target.matches('[data-brand-search]') || (e.target.type !== 'search' && e.target.type !== 'number')) return;
         clearTimeout(typingTimer);
         typingTimer = setTimeout(applyFilters, 450);
     });
 
-    document.querySelectorAll('[data-diag]').forEach(btn => btn.addEventListener('click', () => {
-        const [from, to] = btn.dataset.diag.split(',');
-        filterForm.min_diag.value = from === '0' ? '' : from;
-        filterForm.max_diag.value = to;
+    // Changing the category opens its page: the filters (brands, specs) are different
+    document.querySelector('[data-navigate]').addEventListener('change', e => { location.href = e.target.value; });
+
+    // Pager links: load the page in place
+    list.addEventListener('click', e => {
+        const a = e.target.closest('[data-page]');
+        if (!a || a.classList.contains('disabled')) return;
+        e.preventDefault();
+        currentPage = Number(a.dataset.page) || 1;
+        applyFilters({ keepPage: true });
+    });
+
+    // Brand list: quick search and "clear"
+    const brandSearch = document.querySelector('[data-brand-search]');
+    if (brandSearch) brandSearch.addEventListener('input', () => {
+        const term = brandSearch.value.trim().toLowerCase();
+        document.querySelectorAll('[data-brand-name]').forEach(el => { el.hidden = term && !el.dataset.brandName.includes(term); });
+    });
+    document.querySelectorAll('[data-clear]').forEach(btn => btn.addEventListener('click', () => {
+        filterForm.querySelectorAll(`[name="${btn.dataset.clear}"]`).forEach(i => { i.checked = false; });
+        btn.remove();
         applyFilters();
     }));
+
+    currentPage = Number(new URLSearchParams(location.search).get('page')) || 1;
 </script>
 </body>
 </html>

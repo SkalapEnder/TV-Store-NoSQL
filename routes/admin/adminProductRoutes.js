@@ -1,120 +1,128 @@
 const express = require('express');
-const Brand = require('../../models/Brand');
 const Product = require('../../models/Product');
-const Category = require('../../models/Category');
-const { updateDailyTVProducts } = require("../../scripts/scraper");
+const { importProducts } = require("../../scripts/scraper");
+const { invalidateCatalog } = require("../../scripts/catalog");
+const { CATEGORIES, GROUPS, getCategory, cleanSpecs } = require("../../config/categories");
 const router = express.Router();
 
+const isAdmin = req => req.session.userStatus === "admin";
+const escapeRegex = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 router.get("/", async (req, res) => {
-    if (req.session.userStatus !== 'admin') {
+    if (!isAdmin(req)) {
         req.flash("warning", "This page is for administrators only");
         return res.redirect(req.session.userId ? "/" : "/auth/login");
     }
 
     try {
-        const [products, brands, categories] = await Promise.all([
-            Product.find().sort({ product_id: 1 }).lean(),
-            Brand.find({}, "brand_id brand_name").sort({ brand_name: 1 }).lean(),
-            Category.find({}, "category_id category_name").sort({ category_name: 1 }).lean()
+        // One category at a time: the whole catalog (5k+ products) is too big for one editable table
+        const category = getCategory(req.query.category) || CATEGORIES[0];
+        const q = String(req.query.q || "").trim().slice(0, 100);
+        const filter = { category: category.slug };
+        if (q) {
+            const rx = new RegExp(escapeRegex(q), "i");
+            filter.$or = [{ name: rx }, { model: rx }, { brand: rx }];
+            if (/^\d+$/.test(q)) filter.$or.push({ product_id: Number(q) });
+        }
+        const [products, counts, brands, maxId] = await Promise.all([
+            Product.find(filter).sort({ product_id: 1 }).select("-description").lean(),
+            Product.aggregate([{ $group: { _id: "$category", n: { $sum: 1 }, out: { $sum: { $cond: [{ $gt: ["$quantity", 0] }, 0, 1] } } } }]),
+            Product.distinct("brand", { category: category.slug }),
+            Product.findOne().sort({ product_id: -1 }).select("product_id").lean()
         ]);
-        res.render("admin/products_admin", { products, brands, categories });
+        res.render("admin/products_admin", {
+            products, category, categories: CATEGORIES, groups: GROUPS, q,
+            counts: Object.fromEntries(counts.map(c => [c._id, c])),
+            brands: brands.sort((a, b) => a.localeCompare(b)),
+            nextId: (maxId?.product_id || 0) + 1
+        });
     } catch (err) {
         res.render("templates/error", { errorMessage: "Error getting products: " + err });
     }
 });
 
 router.post("/", async (req, res) => {
+    if (!isAdmin(req)) return res.render("templates/error", { errorMessage: "Unauthorized. Please, login to admin" });
+    const back = `/products/admin?category=${encodeURIComponent(req.body.category || "")}`;
     try {
-        // Ensure only admins can create a product
-        if (!req.session.userStatus || req.session.userStatus !== "admin") {
-            return res.render("templates/error", { errorMessage: "Unauthorized. Please, login to admin" });
-        }
-
-        const { product_id, name, model, description, price, available, diagonal, brand, category, url, pictures } = req.body;
-
-        // Filter out empty picture URLs
-        const imageArray = Array.isArray(pictures) ? pictures.filter(pic => pic.trim() !== "") : [];
-
-        // Fetch brand details
-        const brandData = await Brand.findOne({ brand_id: brand }).select("brand_id brand_name");
-
-        // Fetch category details
-        const categoryData = await Category.findOne({ category_id: category }).select("category_id category_name");
-
-        if (!brandData || !categoryData) {
-            req.flash("error", "Invalid brand or category");
+        const { product_id, name, model, description, price, available, brand, category, url, pictures, specs } = req.body;
+        const cat = getCategory(category);
+        if (!cat) {
+            req.flash("error", "Choose a category");
             return res.redirect(303, "/products/admin");
+        }
+        if (!String(brand || "").trim()) {
+            req.flash("error", "Brand is required");
+            return res.redirect(303, back);
         }
         if (await Product.exists({ product_id })) {
             req.flash("error", `Product ID ${product_id} is already used`);
-            return res.redirect(303, "/products/admin");
+            return res.redirect(303, back);
         }
 
-        // Create new product with brand & category details
-        const newProduct = new Product({
-            product_id,
-            name,
-            model,
-            description,
-            price,
-            quantity: parseInt(available),
-            diagonal,
-            brand: {
-                id: brandData.brand_id,
-                name: brandData.brand_name,
-            },
-            category: {
-                id: categoryData.category_id,
-                name: categoryData.category_name,
-            },
-            url,
-            pictures: imageArray,
-        });
+        // Filter out empty picture URLs
+        const imageArray = (Array.isArray(pictures) ? pictures : [pictures]).filter(pic => pic && String(pic).trim() !== "");
 
-        await newProduct.save();
+        await new Product({
+            product_id, name, model, description, price,
+            quantity: parseInt(available),
+            brand: String(brand).trim(),
+            category: cat.slug,
+            specs: cleanSpecs(cat.slug, specs),          // only the fields this category declares
+            url,
+            pictures: imageArray
+        }).save();
+        invalidateCatalog();
         req.flash("success", `Product “${name}” added`);
-        res.redirect(303, "/products/admin");
+        res.redirect(303, back);
     } catch (err) {
         console.error("Error creating product:", err);
         req.flash("error", "Could not create the product: " + err.message);
-        res.redirect(303, "/products/admin");
+        res.redirect(303, back);
     }
 });
 
-
+// Inline edit from the table. Only these fields can change; specs are validated against the category
 router.put("/:id", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ error: "Administrators only" });
     try {
-        if (!req.session.userStatus || req.session.userStatus !== "admin") {
-            return res.render("templates/error", {errorMessage: "Unauthorized. Please, login to admin" });
-        }
+        const product = await Product.findOne({ product_id: parseInt(req.params.id) });
+        if (!product) return res.status(404).json({ error: "Product not found" });
 
-        await Product.findOneAndUpdate({product_id: parseInt(req.params.id)}, req.body);
-        res.status(200).json({success: true});
+        const { name, model, price, quantity, brand, specs } = req.body;
+        if (name !== undefined) product.name = name;
+        if (model !== undefined) product.model = model;
+        if (price !== undefined) product.price = price;
+        if (quantity !== undefined) product.quantity = quantity;
+        if (brand !== undefined && String(brand).trim()) product.brand = String(brand).trim();
+        if (specs && typeof specs === "object") product.specs = cleanSpecs(product.category, { ...product.specs, ...specs });
+        await product.save();
+        invalidateCatalog();
+        res.json({ success: true, specs: product.specs });
     } catch (err) {
-        res.status(500).send("Error updating product");
+        res.status(400).json({ error: err.message });
     }
 });
 
 router.delete("/:id", async (req, res) => {
+    if (!isAdmin(req)) return res.status(403).json({ error: "Administrators only" });
     try {
-        if (!req.session.userStatus || req.session.userStatus !== "admin") {
-            return res.render("templates/error", {errorMessage: "Unauthorized. Please, login to admin" });
-        }
-
-        await Product.findOneAndDelete({product_id: parseInt(req.params.id)});
-        res.status(200).json({success: true});
+        await Product.findOneAndDelete({ product_id: parseInt(req.params.id) });
+        invalidateCatalog();
+        res.json({ success: true });
     } catch (err) {
-        res.status(500).json({message: "Error deleting product"});
+        res.status(500).json({ message: "Error deleting product" });
     }
 });
 
 router.post("/scrape", async (req, res) => {
-    if (req.session.userStatus !== "admin") {
+    if (!isAdmin(req)) {
         req.flash("warning", "This action is for administrators only");
         return res.redirect(303, "/");
     }
     try {
-        const total = await updateDailyTVProducts();
+        const total = await importProducts();
+        invalidateCatalog();
         req.flash("success", `Import finished: ${total} products in the catalog`);
     } catch (err) {
         console.error("Scraping error:", err);

@@ -4,7 +4,7 @@
  *   npm run bench
  *   npm run bench -- --scales 1000,5000,20000 --queries 100
  *
- * Uses a SEPARATE database (BENCH_MONGO_URI, default mongodb://127.0.0.1:27017/tvstore_bench),
+ * Uses a SEPARATE database (BENCH_MONGO_URI, default mongodb://127.0.0.1:27017/techstore_bench),
  * which is dropped at the start. The database name must contain "bench".
  *
  * For every scale (number of users) it measures:
@@ -32,9 +32,9 @@ const { makeUserGenerator, rng } = require("./lib/synthetic");
 
 const args = process.argv.slice(2);
 const arg = (name, def) => { const i = args.indexOf(`--${name}`); return i >= 0 ? args[i + 1] : def; };
-const URI = process.env.BENCH_MONGO_URI || "mongodb://127.0.0.1:27017/tvstore_bench";
+const URI = process.env.BENCH_MONGO_URI || "mongodb://127.0.0.1:27017/techstore_bench";
 const SCALES = arg("scales", "1000,5000,20000,50000").split(",").map(Number);
-const PRODUCTS = parseInt(arg("products", "600"));
+const PRODUCTS = parseInt(arg("products", "5000"));   // about the size of the real catalog
 const QUERIES = parseInt(arg("queries", "100"));
 const SLOW_QUERIES = parseInt(arg("slow-queries", "30"));
 const EVAL_SCALE = parseInt(arg("eval-scale", "5000"));
@@ -70,21 +70,41 @@ function explainSummary(plan) {
 }
 
 // ---------- Synthetic catalog ----------
+// Category mix, brands and price range (₸) shaped like the real shop.kz import
+const SYNTHETIC_CATEGORIES = {
+    headphones:  [18, ["A4Tech", "Edifier", "Razer", "Defender", "Xiaomi", "HyperX", "Logitech", "Sony"], 4000, 250000],
+    mouse:       [15, ["Defender", "A4Tech", "Logitech", "Genius", "Glorious", "Rapoo", "HP", "Razer"], 2500, 90000],
+    monitor:     [13, ["ASUS", "Acer", "AOC", "Lenovo", "Dell", "Philips", "Samsung", "MSI"], 45000, 900000],
+    phone:       [11, ["Tecno Mobile", "Xiaomi", "HONOR", "vivo", "Huawei", "Samsung", "Infinix", "POCO"], 40000, 900000],
+    keyboard:    [10, ["A4Tech", "Defender", "Varmilo", "Logitech", "Razer", "HP", "Rapoo", "Glorious"], 3000, 120000],
+    psu:         [9,  ["Chieftec", "GameMax", "Thermaltake", "DeepCool", "Lian Li", "1Stplayer", "PCCooler", "Aerocool"], 15000, 180000],
+    motherboard: [9,  ["Gigabyte", "ASUS", "MSI", "ASRock"], 35000, 450000],
+    storage:     [4,  ["Kingston", "Seagate", "Western Digital", "Gigabyte", "Team Group", "Corsair", "Samsung"], 12000, 300000],
+    gpu:         [3,  ["Gigabyte", "ASUS", "MSI", "Palit", "Afox", "Sapphire"], 30000, 1200000],
+    printer:     [2,  ["HP", "Canon", "Epson", "Xerox"], 40000, 400000],
+    tv:          [2,  ["Samsung", "Xiaomi", "Sony", "LG", "Dreame"], 90000, 2500000],
+    cpu:         [2,  ["Intel", "AMD"], 25000, 400000],
+    ram:         [2,  ["Kingston", "Apacer", "GeIL", "Team Group", "Corsair"], 8000, 150000]
+};
+const SOCKETS = ["AM4", "AM5", "LGA1700", "LGA1851"];
+
 function makeCatalog(n) {
     const rand = rng(11);
-    const cats = [[1, "OLED", 1.9], [2, "QLED", 1.3], [3, "LED", 0.8], [4, "Mini LED", 1.6], [5, "NanoCell", 1.0]];
-    const brands = ["Samsung", "LG", "Sony", "Xiaomi", "Hisense", "TCL", "Philips", "Haier", "Panasonic", "Toshiba", "Sharp", "Skyworth", "Artel", "Yasin", "Thomson"]
-        .map((name, i) => [i + 1, name]);
-    const sizes = [32, 43, 50, 55, 65, 75, 85];
+    const entries = Object.entries(SYNTHETIC_CATEGORIES);
+    const weights = entries.map(([, [w]]) => w);
+    const totalW = weights.reduce((a, b) => a + b, 0);
     return Array.from({ length: n }, (_, i) => {
-        const [cid, cname, mult] = cats[Math.floor(rand() * cats.length)];
-        const [bid, bname] = brands[Math.floor(rand() * brands.length)];
-        const diag = sizes[Math.floor(rand() * sizes.length)];
-        const price = Math.round((40000 + diag * diag * 90 * mult * (0.7 + rand() * 0.6)) / 1000) * 1000;
+        let r = rand() * totalW, k = 0;
+        while ((r -= weights[k]) > 0) k++;
+        const [category, [, brands, minPrice, maxPrice]] = entries[k];
+        const brand = brands[Math.floor(rand() * brands.length)];
+        // log-uniform price: many cheap items, few expensive ones
+        const price = Math.round(minPrice * Math.pow(maxPrice / minPrice, rand()) / 100) * 100;
+        const specs = (category === "cpu" || category === "motherboard") ? { socket: SOCKETS[Math.floor(rand() * SOCKETS.length)] } : {};
         return {
-            product_id: 100000 + i, name: `${bname} ${diag}" ${cname} TV ${100000 + i}`, model: `${bname.slice(0, 2).toUpperCase()}${diag}-${i}`,
-            price, quantity: 1000, url: "https://example.com/tv/" + i, diagonal: diag, description: `${cname} television`,
-            brand: { id: bid, name: bname }, category: { id: cid, name: cname }, pictures: []
+            product_id: 100000 + i, name: `${brand} ${category} ${100000 + i}`, model: `${brand.slice(0, 2).toUpperCase()}-${i}`,
+            price, quantity: 1000, url: "https://example.com/p/" + i, description: `Synthetic ${category}`,
+            brand, category, specs, pictures: []
         };
     });
 }

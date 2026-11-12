@@ -1,9 +1,13 @@
 /**
  * Synthetic users with realistic interaction patterns, for the demo and the benchmark.
- * Each user has a hidden "taste": a favourite display type, one or two favourite brands and a
- * price band. Products matching the taste are viewed more often, rated higher and bought more
- * often, so collaborative filtering has real structure to find. Product popularity follows a
- * Zipf-like curve (a few hits, a long tail). A seeded PRNG makes runs reproducible.
+ * Each user has a hidden "taste":
+ *   - a persona that decides which categories they shop in (a PC builder looks at GPUs, CPUs,
+ *     motherboards, RAM, storage and PSUs; a gamer at GPUs, monitors, keyboards, mice, headsets…),
+ *   - one or two favourite brands, a price band (budget / mid / premium inside each category),
+ *   - for PC builders, a platform (CPU socket): an AM5 CPU goes with an AM5 motherboard.
+ * Products matching the taste are viewed more often, rated higher and bought more often, so
+ * collaborative filtering has real (also cross-category) structure to find. Product popularity
+ * follows a Zipf-like curve (a few hits, a long tail). A seeded PRNG makes runs reproducible.
  */
 
 function rng(seed = 42) {            // mulberry32
@@ -28,37 +32,61 @@ function pickIndex(rand, cumulative) {
     return lo;
 }
 
-/** Price band of each product: 0 budget, 1 mid, 2 premium (by price terciles) */
+/** Price band of each product inside its category: 0 budget, 1 mid, 2 premium (price terciles) */
 function priceBands(products) {
-    const prices = products.map(p => p.price).sort((a, b) => a - b);
-    const t1 = prices[Math.floor(prices.length / 3)] || 0;
-    const t2 = prices[Math.floor(2 * prices.length / 3)] || 0;
-    return new Map(products.map(p => [p.product_id, p.price <= t1 ? 0 : p.price <= t2 ? 1 : 2]));
+    const byCat = new Map();
+    products.forEach(p => { const l = byCat.get(p.category) || []; l.push(p.price); byCat.set(p.category, l); });
+    const cuts = new Map([...byCat].map(([c, prices]) => {
+        prices.sort((a, b) => a - b);
+        return [c, [prices[Math.floor(prices.length / 3)] || 0, prices[Math.floor(2 * prices.length / 3)] || 0]];
+    }));
+    return new Map(products.map(p => {
+        const [t1, t2] = cuts.get(p.category);
+        return [p.product_id, p.price <= t1 ? 0 : p.price <= t2 ? 1 : 2];
+    }));
 }
 
+// Which categories each kind of shopper looks at (weights = how often a persona occurs)
+const PERSONAS = [
+    { name: "pc-builder", weight: 3, categories: ["gpu", "cpu", "motherboard", "ram", "storage", "psu"] },
+    { name: "gamer",      weight: 3, categories: ["gpu", "monitor", "keyboard", "mouse", "headphones"] },
+    { name: "office",     weight: 2, categories: ["printer", "monitor", "keyboard", "mouse"] },
+    { name: "mobile",     weight: 2, categories: ["phone", "headphones"] },
+    { name: "home",       weight: 2, categories: ["tv", "phone", "headphones"] }
+];
+
 /**
- * products: [{ product_id, name, price, pictures?, brand: {id}, category: {id} }]
- * returns a generator function (index) -> { view_history, purchase_history }
+ * products: [{ product_id, name, price, pictures?, brand, category, specs? }]
+ * returns a generator function () -> { view_history, purchase_history }
  */
 function makeUserGenerator(products, { seed = 42, minItems = 6, maxItems = 40, days = 120, withPictures = false } = {}) {
     const rand = rng(seed);
     const bands = priceBands(products);
-    const categories = [...new Set(products.map(p => p.category?.id))];
-    const brands = [...new Set(products.map(p => p.brand?.id))];
+    const present = new Set(products.map(p => p.category));
+    const personas = PERSONAS.map(p => ({ ...p, categories: new Set(p.categories.filter(c => present.has(c))) }))
+        .filter(p => p.categories.size);
+    const personaWeights = personas.map(p => p.weight);
+    const sockets = [...new Set(products.filter(p => p.category === "cpu" && p.specs?.socket).map(p => p.specs.socket))];
+    const pickWeighted = weights => { let r = rand() * weights.reduce((a, b) => a + b, 0); return weights.findIndex(w => (r -= w) < 0); };
     // Zipf-like base popularity (shuffled, so it does not follow product_id order)
     const order = products.map((_, i) => i).sort(() => rand() - 0.5);
     const basePop = new Float64Array(products.length);
     order.forEach((pi, rank) => { basePop[pi] = 1 / Math.pow(rank + 1, 0.8); });
 
     return function generate() {
-        const favCat = categories[Math.floor(rand() * categories.length)];
-        const favBrands = new Set([brands[Math.floor(rand() * brands.length)], rand() < 0.5 ? brands[Math.floor(rand() * brands.length)] : null]);
+        const persona = personas.length ? personas[Math.max(0, pickWeighted(personaWeights))] : { categories: new Set() };
+        // Favourite brands: drawn from products of the persona's categories, so popular brands are picked more
+        const own = products.filter(p => persona.categories.has(p.category));
+        const pool = own.length ? own : products;
+        const favBrands = new Set([pool[Math.floor(rand() * pool.length)].brand, rand() < 0.5 ? pool[Math.floor(rand() * pool.length)].brand : null]);
         const band = Math.floor(rand() * 3);
+        const socket = sockets.length ? sockets[Math.floor(rand() * sockets.length)] : null;
 
         const affinity = products.map(p => 1
-            + (p.category?.id === favCat ? 2.5 : 0)
-            + (favBrands.has(p.brand?.id) ? 1.5 : 0)
-            + (bands.get(p.product_id) === band ? 1 : 0));
+            + (persona.categories.has(p.category) ? 3 : 0)
+            + (favBrands.has(p.brand) ? 1.5 : 0)
+            + (bands.get(p.product_id) === band ? 1 : 0)
+            + (socket && p.specs?.socket === socket ? 1.5 : 0));
         const cumulative = new Float64Array(products.length);
         let acc = 0;
         affinity.forEach((a, i) => { acc += a * a * basePop[i]; cumulative[i] = acc; });
@@ -97,4 +125,4 @@ function makeUserGenerator(products, { seed = 42, minItems = 6, maxItems = 40, d
     };
 }
 
-module.exports = { rng, makeUserGenerator };
+module.exports = { rng, makeUserGenerator, PERSONAS };
