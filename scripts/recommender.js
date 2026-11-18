@@ -410,7 +410,11 @@ function scheduleBuilds(everyMinutes = Number(process.env.RECO_REBUILD_MINUTES) 
         .then(s => console.log(`🧠 Recommendations rebuilt (${trigger}): ${s.items} items, ${s.users} users, ${s.durationMs} ms`))
         .catch(err => console.error("Recommendation build failed:", err.message));
     lastBuild().then(last => {
-        if (!last || Date.now() - new Date(last.startedAt).getTime() > everyMinutes * 60000) run("startup");
+        const ageMin = last ? (Date.now() - new Date(last.startedAt).getTime()) / 60000 : Infinity;
+        if (ageMin > everyMinutes) return run("startup");
+        // The matrix is still fresh (e.g. built by seed:demo / recs:build a moment ago): reuse it
+        console.log(`🧠 Recommendations up to date: built ${Math.round(ageMin)} min ago (${last.items} items, ${last.users} users); ` +
+            `next rebuild in ${everyMinutes} min. Run "npm run recs:build" to rebuild now.`);
     }).catch(() => run("startup"));
     const timer = setInterval(() => run("schedule"), everyMinutes * 60000);
     timer.unref();

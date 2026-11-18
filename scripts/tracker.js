@@ -50,14 +50,16 @@ async function trackView(req, product) {
   }
 }
 
-// Called when a logged-in user rates a product (value: integer 1..5).
-// Stores the rating in the user's history and keeps the product's rating_sum / rating_count
-// in step, so the average is read from the product without scanning users.
-// Returns the user's previous rating (or null).
-async function trackRating(userId, product, value) {
+// Called when a logged-in user rates a product (value: integer 1..5, review: optional text).
+// Stores the rating and the review in the user's history entry of that product and keeps the
+// product's rating_sum / rating_count in step, so the average is read from the product without
+// scanning users. An empty review removes the previous text. Returns the previous rating (or null).
+async function trackRating(userId, product, value, review = "") {
   const snap = snapshot(product);
   const now = new Date();
   const pid = snap.product_id;
+  const text = String(review || "").trim().slice(0, 1000);
+  const reviewUpdate = text ? { $set: { 'view_history.$.review': text } } : { $unset: { 'view_history.$.review': "" } };
 
   const current = await User.findOne(
     { _id: userId, 'view_history.product_id': pid },
@@ -71,16 +73,17 @@ async function trackRating(userId, product, value) {
     // Conditional on the old value: of two simultaneous requests only one is counted
     result = await User.updateOne(
       { _id: userId, view_history: { $elemMatch: { product_id: pid, rating: previous ?? { $exists: false } } } },
-      { $set: { 'view_history.$.rating': value, 'view_history.$.ratedAt': now } }
+      { $set: { 'view_history.$.rating': value, 'view_history.$.ratedAt': now, ...reviewUpdate.$set }, ...(reviewUpdate.$unset ? { $unset: reviewUpdate.$unset } : {}) }
     );
   } else {
     result = await User.updateOne(
       { _id: userId, 'view_history.product_id': { $ne: pid } },
-      { $push: { view_history: { $each: [{ ...snap, rating: value, ratedAt: now, views: 0, lastViewed: now }], $slice: -MAX_HISTORY } } }
+      { $push: { view_history: { $each: [{ ...snap, rating: value, ...(text ? { review: text } : {}), ratedAt: now, views: 0, lastViewed: now }], $slice: -MAX_HISTORY } } }
     );
   }
-  if (result.modifiedCount === 0) return previous;   // lost a race with another request, nothing to count
+  if (result.modifiedCount === 0) return previous;   // lost a race (or nothing changed), nothing to count
 
+  if (previous === value) { invalidateRecommendations(userId); return previous; }   // only the text changed
   const inc = previous === null
     ? { rating_sum: value, rating_count: 1 }
     : { rating_sum: value - previous };
@@ -89,14 +92,37 @@ async function trackRating(userId, product, value) {
   return previous;
 }
 
-// The current user's rating of one product (or null)
+// The current user's rating and review of one product: { rating, review } (rating null if none)
 async function getUserRating(userId, productId) {
-  if (!userId) return null;
+  if (!userId) return { rating: null, review: "" };
   const doc = await User.findOne(
     { _id: userId, 'view_history.product_id': productId },
     { 'view_history.$': 1 }
   ).lean();
-  return doc?.view_history?.[0]?.rating ?? null;
+  const entry = doc?.view_history?.[0];
+  return { rating: entry?.rating ?? null, review: entry?.review || "" };
 }
 
-module.exports = { trackView, trackRating, getUserRating };
+// Reviews of a product, newest first: the rating entries with text from all users' histories.
+// The $elemMatch on view_history.product_id uses the multikey index; "verified" = the reviewer
+// also has the product in purchase_history.
+async function getProductReviews(productId, { limit = 10 } = {}) {
+  const match = { view_history: { $elemMatch: { product_id: productId, review: { $exists: true, $ne: "" } } } };
+  const [items, total] = await Promise.all([
+    User.aggregate([
+      { $match: match },
+      { $project: {
+          username: 1,
+          entry: { $first: { $filter: { input: "$view_history", cond: { $eq: ["$$this.product_id", productId] } } } },
+          verified: { $in: [productId, { $ifNull: ["$purchase_history.product_id", []] }] }
+      } },
+      { $sort: { "entry.ratedAt": -1 } },
+      { $limit: limit },
+      { $project: { _id: 0, username: 1, verified: 1, rating: "$entry.rating", review: "$entry.review", date: "$entry.ratedAt" } }
+    ]),
+    User.countDocuments(match)
+  ]);
+  return { items, total };
+}
+
+module.exports = { trackView, trackRating, getUserRating, getProductReviews };

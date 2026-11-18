@@ -116,7 +116,7 @@
         <ul class="nav nav-tabs mb-4" role="tablist">
             <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-specs" type="button" role="tab">Specifications</button></li>
             <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-desc" type="button" role="tab">Description</button></li>
-            <li class="nav-item" role="presentation"><button class="nav-link" id="reviews-tab" data-bs-toggle="tab" data-bs-target="#reviews" type="button" role="tab">Reviews<% if (product.rating_count) { %> (<%= product.rating_count %>)<% } %></button></li>
+            <li class="nav-item" role="presentation"><button class="nav-link" id="reviews-tab" data-bs-toggle="tab" data-bs-target="#reviews" type="button" role="tab">Reviews<% if (reviews.total) { %> (<%= reviews.total %>)<% } %></button></li>
         </ul>
         <div class="tab-content">
             <div class="tab-pane fade show active" id="tab-specs" role="tabpanel">
@@ -147,29 +147,51 @@
                         <div class="surface surface-pad rating-summary text-center">
                             <div class="big"><%= avg ? avg.toFixed(1) : '—' %></div>
                             <div class="stars my-2 fs-5"><% for (let i = 1; i <= 5; i++) { %><i class="bi <%= avg && avg >= i - 0.25 ? 'bi-star-fill' : (avg && avg >= i - 0.75 ? 'bi-star-half' : 'bi-star off') %>"></i><% } %></div>
-                            <div class="text-muted small">Based on <%= product.rating_count || 0 %> <%= product.rating_count === 1 ? 'rating' : 'ratings' %></div>
+                            <div class="text-muted small">Based on <%= product.rating_count || 0 %> <%= product.rating_count === 1 ? 'rating' : 'ratings' %><% if (reviews.total) { %> · <%= reviews.total %> <%= reviews.total === 1 ? 'review' : 'reviews' %><% } %></div>
                         </div>
                     </div>
                     <div class="col-md-8">
                         <div class="surface surface-pad h-100">
                             <% if (isLoggedIn) { %>
-                                <h3 class="h5 mb-1"><%= userRating ? 'Your rating' : 'Rate this product' %></h3>
-                                <p class="text-muted small mb-3"><%= userRating ? 'You can change your rating at any time.' : 'Your rating helps other customers and improves your recommendations.' %></p>
+                                <h3 class="h5 mb-1"><%= userRating ? 'Your review' : 'Review this product' %></h3>
+                                <p class="text-muted small mb-3"><%= userRating ? 'You can change your rating and review at any time.' : 'Your rating helps other customers and improves your recommendations.' %></p>
                                 <form action="/products/<%= product.product_id %>/rate" method="POST" class="d-flex flex-wrap align-items-center gap-3">
+                                    <textarea class="form-control w-100" name="review" rows="3" maxlength="1000" placeholder="What did you like or dislike? (optional)" aria-label="Review text"><%= userReview %></textarea>
                                     <div class="star-input" role="radiogroup" aria-label="Rating">
                                         <% for (let i = 5; i >= 1; i--) { %>
                                             <input type="radio" id="star<%= i %>" name="rating" value="<%= i %>" <%= userRating === i ? 'checked' : '' %> required>
                                             <label for="star<%= i %>" title="<%= i %> of 5"><i class="bi bi-star-fill"></i></label>
                                         <% } %>
                                     </div>
-                                    <button type="submit" class="btn btn-brand"><%= userRating ? 'Update rating' : 'Submit rating' %></button>
+                                    <button type="submit" class="btn btn-brand"><%= userRating ? 'Update review' : 'Submit review' %></button>
                                 </form>
                             <% } else { %>
                                 <h3 class="h5 mb-1">Share your opinion</h3>
-                                <p class="text-muted mb-3">Log in to rate this product.</p>
+                                <p class="text-muted mb-3">Log in to rate and review this product.</p>
                                 <a href="/auth/login" class="btn btn-outline-brand">Log in</a>
                             <% } %>
                         </div>
+                    </div>
+                    <div class="col-12">
+                        <% if (reviews.items.length) { %>
+                            <div class="review-list">
+                                <% reviews.items.forEach(r => { %>
+                                    <article class="review-item">
+                                        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                            <span class="avatar avatar-sm"><%= (r.username || '?').trim().charAt(0) %></span>
+                                            <strong><%= r.username || 'Customer' %></strong>
+                                            <span class="stars"><% for (let i = 1; i <= 5; i++) { %><i class="bi <%= r.rating >= i ? 'bi-star-fill' : 'bi-star off' %>"></i><% } %></span>
+                                            <% if (r.verified) { %><span class="badge-soft badge-stock"><i class="bi bi-patch-check me-1"></i>Verified purchase</span><% } %>
+                                            <% if (r.date) { %><span class="text-muted small ms-auto"><%= new Date(r.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) %></span><% } %>
+                                        </div>
+                                        <p class="mb-0" style="white-space: pre-line"><%= r.review %></p>
+                                    </article>
+                                <% }) %>
+                            </div>
+                            <% if (reviews.total > reviews.items.length) { %><p class="text-muted small mt-2">Showing the <%= reviews.items.length %> latest of <%= reviews.total %> reviews.</p><% } %>
+                        <% } else { %>
+                            <p class="text-muted mb-0">No written reviews yet.</p>
+                        <% } %>
                     </div>
                 </div>
             </div>

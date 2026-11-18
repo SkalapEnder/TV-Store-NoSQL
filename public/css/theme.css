@@ -366,6 +366,10 @@ a:hover { color: var(--bs-link-hover-color); }
 .category-pill i { color: var(--brand); }
 [data-bs-theme="dark"] .category-pill i { color: var(--link); }
 .category-pill small { color: var(--muted); font-size: .76rem; }
+/* Product reviews */
+.review-list { display: flex; flex-direction: column; gap: .75rem; }
+.review-item { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; }
+.avatar.avatar-sm { width: 28px; height: 28px; font-size: .8rem; }
 .category-pill.border-brand { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand) inset; }
 .catalog-pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .35rem; margin-top: 2rem; }
 .catalog-pager .btn { min-width: 36px; }

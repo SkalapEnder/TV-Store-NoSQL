@@ -83,7 +83,7 @@ pattern (or a wildcard index `{"specs.$**": 1}`) would be the next step.
 {
   _id, username, email, password /* bcrypt */, role: "user" | "admin",
   profile: { full_name, phone, city, birth_date, about },
-  view_history: [{ product_id, name, price, url, pictures, views, rating, ratedAt, lastViewed }],
+  view_history: [{ product_id, name, price, url, pictures, views, rating, review, ratedAt, lastViewed }],
   purchase_history: [{ order_id, product_id, name, price, quantity, url, picture, purchasedAt }],
   createdAt, updatedAt
 }
@@ -94,7 +94,7 @@ Interactions recorded:
 | Interaction | Where it is written | How |
 |-------------|---------------------|-----|
 | View        | `users.view_history` | `scripts/tracker.js#trackView`: the first view adds an entry, later views do `$inc views` and update `lastViewed`. One entry per product, capped at 100 entries (`$slice`). |
-| Rating 1–5  | `users.view_history[].rating` + `products.rating_sum/rating_count` | `trackRating`: the update is conditional on the previous value, so of two simultaneous requests only one is counted; the product totals get `$inc` by the difference. |
+| Rating 1–5 + review | `users.view_history[].rating`, `.review` (optional text) + `products.rating_sum/rating_count` | `trackRating`: the update is conditional on the previous value, so of two simultaneous requests only one is counted; the product totals get `$inc` by the difference. The product page lists reviews with `getProductReviews`: an aggregation over `users` that matches `view_history` with `$elemMatch` (multikey index on `view_history.product_id`) and marks reviewers who also bought the product as *verified purchase*. |
 | Purchase    | `users.purchase_history` | `scripts/purchase.js#recordPurchase`: stock is decremented atomically (`quantity: {$gte: qty}`); if a later item fails, the stock taken for earlier items is returned. |
 | Cart        | `carts` | Atomic `findOneAndUpdate` takes and empties the cart, so a double click cannot buy twice. |
 

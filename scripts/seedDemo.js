@@ -5,6 +5,7 @@
  *   npm run seed:demo                 # 150 demo users (default)
  *   npm run seed:demo -- --users 300
  *   npm run seed:demo -- --clean      # remove all demo users
+ *   npm run seed:demo -- --reviews    # add a rating + review to every purchase of the existing demo users
  *
  * Demo users: demo1@demo.tvstore … demoN@demo.tvstore, password Demo12345.
  * Only users with this email domain are created or removed; real accounts, products and stock
@@ -15,7 +16,8 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const Product = require("../models/Product");
-const { makeUserGenerator } = require("./lib/synthetic");
+const { makeUserGenerator, rng } = require("./lib/synthetic");
+const { makeReview, purchaseRating } = require("./lib/reviews");
 const { buildSimilarities } = require("./recommender");
 
 const DOMAIN = "demo.tvstore";
@@ -39,8 +41,52 @@ async function recomputeProductRatings() {
     console.log(`Product ratings recomputed: ${totals.length} rated products`);
 }
 
+/**
+ * Every purchased product gets a rating (kept if the shopper already rated it, otherwise mostly
+ * 4–5 stars) and a review text matching the stars, written a few days after the purchase.
+ * Mutates the user's view_history; returns the number of reviews written.
+ */
+function addPurchaseReviews(user, productsById, rand) {
+    let written = 0;
+    for (const purchase of user.purchase_history || []) {
+        const product = productsById.get(purchase.product_id);
+        const entry = (user.view_history || []).find(v => v.product_id === purchase.product_id);
+        if (!product || !entry) continue;
+        if (!entry.rating) entry.rating = purchaseRating(rand);
+        entry.review = makeReview(product, entry.rating, rand);
+        entry.ratedAt = new Date(new Date(purchase.purchasedAt || Date.now()).getTime() + (1 + rand() * 9) * 86400000);
+        if (entry.ratedAt > new Date()) entry.ratedAt = new Date();
+        written++;
+    }
+    return written;
+}
+
+// --reviews: add reviews to the demo users that already exist (their history is kept)
+async function reviewExistingUsers() {
+    const users = await User.find({ email: new RegExp(`@${DOMAIN.replace(".", "\\.")}$`) }, "view_history purchase_history").lean();
+    if (!users.length) throw new Error("No demo users: run npm run seed:demo first");
+    const ids = [...new Set(users.flatMap(u => (u.purchase_history || []).map(p => p.product_id)))];
+    const products = await Product.find({ product_id: { $in: ids } }, "product_id category specs").lean();
+    const productsById = new Map(products.map(p => [p.product_id, p]));
+    const rand = rng(77);
+    let reviews = 0;
+    const ops = users.map(u => {
+        reviews += addPurchaseReviews(u, productsById, rand);
+        return { updateOne: { filter: { _id: u._id }, update: { $set: { view_history: u.view_history } } } };
+    });
+    await User.bulkWrite(ops, { ordered: false });
+    console.log(`Reviews written: ${reviews} for ${users.length} demo users`);
+}
+
 async function main() {
     await mongoose.connect(process.env.MONGO_URI, { serverSelectionTimeoutMS: 8000 });
+    if (args.includes("--reviews")) {
+        await reviewExistingUsers();
+        await recomputeProductRatings();
+        const stats = await buildSimilarities("script");
+        console.log(`Similarity matrix: ${stats.items} items, ${stats.neighbors} neighbor links, ${stats.durationMs} ms`);
+        return;
+    }
     const removed = await User.deleteMany({ email: new RegExp(`@${DOMAIN.replace(".", "\\.")}$`) });
     console.log(`Removed ${removed.deletedCount} previous demo users`);
     if (args.includes("--clean")) {
@@ -50,12 +96,14 @@ async function main() {
     }
 
     const count = parseInt(arg("users", "150"));
-    const products = await Product.find({}, "product_id name price pictures brand category specs.socket").lean();
+    const products = await Product.find({}, "product_id name price pictures brand category specs").lean();
     if (products.length < 10) throw new Error("The catalog has fewer than 10 products: import products first (Products → Import from feed)");
 
     const generate = makeUserGenerator(products, { seed: 2026, minItems: 5, maxItems: Math.min(35, products.length), withPictures: true });
     const password = await bcrypt.hash("Demo12345", 10);
     const now = new Date();
+    const productsById = new Map(products.map(p => [p.product_id, p]));
+    const reviewRand = rng(77);
     const docs = Array.from({ length: count }, (_, i) => ({
         username: `Demo ${i + 1}`,
         email: `demo${i + 1}@${DOMAIN}`,
@@ -66,10 +114,11 @@ async function main() {
         createdAt: now,
         updatedAt: now
     }));
+    const reviews = docs.reduce((s, d) => s + addPurchaseReviews(d, productsById, reviewRand), 0);
     await User.collection.insertMany(docs, { ordered: false });
     const interactions = docs.reduce((s, d) => s + d.view_history.length, 0);
     const purchases = docs.reduce((s, d) => s + d.purchase_history.length, 0);
-    console.log(`Created ${count} demo users: ${interactions} viewed products, ${purchases} purchases, catalog of ${products.length}`);
+    console.log(`Created ${count} demo users: ${interactions} viewed products, ${purchases} purchases, ${reviews} reviews, catalog of ${products.length}`);
     await recomputeProductRatings();
 
     const stats = await buildSimilarities("script");

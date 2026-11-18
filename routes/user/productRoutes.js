@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Product = require("../../models/Product");
-const { trackView, trackRating, getUserRating } = require("../../scripts/tracker");
+const { trackView, trackRating, getUserRating, getProductReviews } = require("../../scripts/tracker");
 const { similarItems } = require("../../scripts/recommender");
 const catalog = require("../../scripts/catalog");
 const { getCategory, getGroup, GROUPS, CATEGORIES } = require("../../config/categories");
@@ -66,15 +66,16 @@ router.get("/:id", async (req, res) => {
         if (!product) return res.status(404).render("templates/error", { errorMessage: "This product does not exist or was removed.", status: 404 });
         trackView(req, product);
 
-        const [userRating, related, alsoViewed] = await Promise.all([
+        const [mine, reviews, related, alsoViewed] = await Promise.all([
             getUserRating(req.session.userId, productId),
+            getProductReviews(productId, { limit: 10 }),
             catalog.relatedProducts(product, 4),
             // Collaborative filtering: products that the same users interacted with
             similarItems(productId, { limit: 4 }).catch(err => { console.error("Similar items error:", err.message); return []; })
         ]);
         res.render("products/show", {
             product: catalog.withAvg(product), category: getCategory(product.category),
-            userRating, related, alsoViewed, back: req.originalUrl
+            userRating: mine.rating, userReview: mine.review, reviews, related, alsoViewed, back: req.originalUrl
         });
     } catch (err) {
         res.status(500).render("templates/error", { errorMessage: "Error fetching product: " + err.message });
@@ -96,8 +97,8 @@ router.post("/:id/rate", async (req, res) => {
         const product = await Product.findOne({ product_id: productId }).lean();
         if (!product) return res.status(404).send("Product not found");
 
-        const previous = await trackRating(userId, product, value);
-        req.flash("success", previous ? `Your rating was updated to ${value} ★` : `Thank you! You rated this product ${value} ★`);
+        const previous = await trackRating(userId, product, value, String(req.body.review || "").slice(0, 1000));
+        req.flash("success", previous ? `Your review was updated (${value} ★)` : `Thank you for your review (${value} ★)`);
         res.redirect(303, `/products/${productId}#reviews`);
     } catch (err) {
         console.error("Error rating product:", err);

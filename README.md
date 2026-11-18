@@ -84,6 +84,7 @@ npm start
 | `npm run recs:build` | Rebuild the similarity matrix (also runs at startup and every hour) |
 | `npm run seed:demo -- --users 300` | Add synthetic shoppers to see recommendations on a fresh database |
 | `npm run seed:demo -- --clean` | Remove the demo shoppers |
+| `npm run seed:demo -- --reviews` | Give every purchase of the existing demo shoppers a rating and a review text (new demo shoppers get them automatically) |
 | `npm run bench` | Performance benchmark on a separate local database `techstore_bench` (dropped on every run) |
 | `npm run import` | Import / update the catalog from the shop.kz feed (also *Products → Import from feed* in admin). `-- --file feed.xml` uses a saved copy |
 

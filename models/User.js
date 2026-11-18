@@ -29,6 +29,7 @@ const userSchema = new mongoose.Schema({
         pictures:   [String],
         views:      { type: Number, default: 0 },
         rating:     { type: Number, min: 1, max: 5 },
+        review:     { type: String, trim: true, maxlength: 1000 },   // optional text written with the rating
         ratedAt:    Date,
         lastViewed: { type: Date, default: Date.now }
     }],
